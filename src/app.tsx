@@ -2,6 +2,8 @@ import styles from "./css/app.module.scss";
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom";
 import FullScreen from "./components/FullScreen/FullScreen";
+import { motion } from "framer-motion";
+import { useCursor } from "./utils/hooks";
 
 export const getSessionMembers = async (join_session_token: string) => {
   try {
@@ -23,6 +25,7 @@ export const App = () => {
 
   const [state, setState] = useState(0);
   const [response, setResponse] = useState();
+  const { cursorXSpring, cursorYSpring } = useCursor();
 
   const local_device_id = Spicetify.Player.data.play_origin.device_identifier;
 
@@ -39,7 +42,9 @@ export const App = () => {
   };
 
   const fsHandler = () => {
-    const container = document.querySelector(`.${styles.supersession}.overlay`);
+    const container = document.querySelector(
+      `.${styles.supersession}.${styles.overlay}`
+    );
     if (!container) {
       console.log("no container");
       return;
@@ -52,7 +57,7 @@ export const App = () => {
       document.documentElement.requestFullscreen();
     }
     ReactDOM.render(
-      <>
+      <div className={styles.fullscreen_container}>
         <div className={styles.close} onClick={fsHandler}>
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -71,7 +76,7 @@ export const App = () => {
         </div>
 
         <FullScreen response={response} />
-      </>,
+      </div>,
       container
     );
   };
@@ -79,13 +84,19 @@ export const App = () => {
   return (
     <>
       <div className={styles.supersession}>
-        <FullScreen response={response} />
-        <button
+        <motion.div
+          whileHover={{ opacity: 1 }}
+          className={styles.tab_container}
+        >
+          <FullScreen response={response} />
+        </motion.div>
+        <motion.button
+          whileHover={{ scale: 1.1 }}
           className={`${styles.button} ${styles.large}`}
           onClick={fsHandler}
         >
           {"Enter full Screen"}
-        </button>
+        </motion.button>
       </div>
     </>
   );

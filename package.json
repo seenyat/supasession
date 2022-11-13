@@ -16,6 +16,7 @@
   "dependencies": {
     "@nuintun/qrcode": "^3.3.0",
     "art-qr": "^0.1.2",
-    "dayjs": "^1.11.6"
+    "dayjs": "^1.11.6",
+    "framer-motion": "^7.6.6"
   }
 }

@@ -5,20 +5,39 @@ import styles from '../css/app.module.scss'
     await new Promise(resolve => setTimeout(resolve, 100));
   }
 
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      const container = document.querySelector(
+        `.${styles.supersession}.${styles.overlay}`
+      );
+      if (!container) {
+        console.log("no container");
+        return;
+      }
+      if (document.webkitIsFullScreen) {
+        document.exitFullscreen();
+        container.classList.add(styles.hidden);
+      }
+    }
+  });
+
   const container = document.createElement("div");
-  container.classList.add(styles.supersession)
-  container.classList.add("overlay");
+  container.classList.add(styles.supersession);
+  container.classList.add(styles.overlay);
   container.classList.add(styles.hidden);
   const existingContainer = document.querySelector(
-    `${styles.supersession}.overlay`
+    `.${styles.supersession}.${styles.overlay}`
   );
-  console.log('adding to body')
-  document.body.append(container)
-  if (!existingContainer){
+  document.body.append(container);
+  if (!existingContainer) {
+    document.body.append(container);
   }
-  Spicetify.Platform.PlayerAPI._events.addListener("queue_update", (data:any) => {
-    console.log(data)
-  });
+  Spicetify.Platform.PlayerAPI._events.addListener(
+    "queue_update",
+    (data: any) => {
+      console.log("QUEUE UPDATE:", data);
+    }
+  );
 
   // Show message on start.
   Spicetify.showNotification("Нныа!");

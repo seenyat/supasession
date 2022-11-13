@@ -13,6 +13,8 @@ import Dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import dayjs from "dayjs";
 let MyQRInstance: any;
+import { motion, Reorder } from "framer-motion";
+import { useCursor } from "../../utils/hooks";
 
 Dayjs.extend(relativeTime);
 
@@ -22,6 +24,7 @@ interface TFullScreenProps {
 const FullScreen = ({ response }: TFullScreenProps) => {
   const [currentSong, setCurrentSong] = useState<any>(null);
   const [imageState, setImageState] = useState<any>();
+  const { cursorXSpring, cursorYSpring } = useCursor();
   const [users, setUsers] = useState<Array<{}>>([]);
 
   useEffect(() => {
@@ -73,27 +76,47 @@ const FullScreen = ({ response }: TFullScreenProps) => {
   return (
     <div className={styles.container}>
       <div className={styles.session}>
-        {users?.length > 0 &&
-          users.map((user: any) => (
-            <div className={styles.user_card} key={user.user_id}>
-              <span className={styles.username}>{user.display_name}</span>
-              <span className={styles.seconds}>
-                {user && dayjs(+user.joined_timestamp).fromNow()}
-              </span>
-            </div>
-          ))}
+        <Reorder.Group axis="y" values={users} onReorder={setUsers}>
+          {users?.length > 0 &&
+            users.map((user: any) => (
+              <Reorder.Item key={user.user_id} value={user}>
+                <div className={styles.user_card} key={user.user_id}>
+                  <span className={styles.username}>{user.display_name}</span>
+                  <span className={styles.seconds}>
+                    {user && dayjs(+user.joined_timestamp).fromNow()}
+                  </span>
+                </div>
+              </Reorder.Item>
+            ))}
+        </Reorder.Group>
       </div>
       <div>
         {/* {img && JSON.stringify(img)} */}
 
         {/* {imageState && imageState} */}
-        <img
+        <motion.img
+          whileHover={{ scale: 1.1 }}
+          style={{ originX: 1, originY: 1 }}
           className={styles.cover}
-          src={currentSong?.metadata.image_large_url}
+          src={currentSong?.metadata.image_xlarge_url}
           alt=""
         />
-        <img className={styles.qr} src={imageState} alt="" srcset="" />
-
+        <motion.div
+          className={styles.cursor}
+          style={{
+            translateX: cursorXSpring,
+            translateY: cursorYSpring,
+          }}
+        />
+        <motion.img
+          whileHover={{ opacity: 1, scale: 1.3 }}
+          whileTap={{ transform: "rotate()" }}
+          style={{ originX: 0, originY: 1 }}
+          className={styles.qr}
+          src={imageState}
+          alt=""
+          srcset=""
+        />
         <div>{currentSong?.metadata.album_title}</div>
         <div>{currentSong?.metadata.title}</div>
         <div>{currentSong?.metadata.album_artist_name}</div>
