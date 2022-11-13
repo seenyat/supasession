@@ -85,15 +85,14 @@ const FullScreen = ({ response }: TFullScreenProps) => {
       </div>
       <div>
         {/* {img && JSON.stringify(img)} */}
-        <img className={styles.qr} src={imageState} alt="" srcset="" />
 
         {/* {imageState && imageState} */}
         <img
           className={styles.cover}
           src={currentSong?.metadata.image_large_url}
           alt=""
-          srcset=""
         />
+        <img className={styles.qr} src={imageState} alt="" srcset="" />
 
         <div>{currentSong?.metadata.album_title}</div>
         <div>{currentSong?.metadata.title}</div>
