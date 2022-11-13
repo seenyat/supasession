@@ -73,14 +73,15 @@ const FullScreen = ({ response }: TFullScreenProps) => {
   return (
     <div className={styles.container}>
       <div className={styles.session}>
-        {users.map((user: any) => (
-          <div className={styles.user_card} key={user.user_id}>
-            <span className={styles.username}>{user.display_name}</span>
-            <span className={styles.seconds}>
-              {user && dayjs(+user.joined_timestamp).fromNow()}
-            </span>
-          </div>
-        ))}
+        {users?.length > 0 &&
+          users.map((user: any) => (
+            <div className={styles.user_card} key={user.user_id}>
+              <span className={styles.username}>{user.display_name}</span>
+              <span className={styles.seconds}>
+                {user && dayjs(+user.joined_timestamp).fromNow()}
+              </span>
+            </div>
+          ))}
       </div>
       <div>
         {/* {img && JSON.stringify(img)} */}
