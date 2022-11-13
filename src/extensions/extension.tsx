@@ -7,8 +7,11 @@ import styles from '../css/app.module.scss'
 
   const container = document.createElement("div");
   container.classList.add(styles.supersession)
-  container.classList.add(styles.hidden)
-  const existingContainer = document.querySelector(`${styles.supersession}`);
+  container.classList.add("overlay");
+  container.classList.add(styles.hidden);
+  const existingContainer = document.querySelector(
+    `${styles.supersession}.overlay`
+  );
   console.log('adding to body')
   document.body.append(container)
   if (!existingContainer){
