@@ -28,7 +28,7 @@ const FullScreen = ({ response }: TFullScreenProps) => {
     setCurrentSong(Spicetify.Player.data.track);
 
     return () => {};
-  }, []);
+  }, [Spicetify.Player.data.track]);
 
   useEffect(() => {
     const interval = setInterval(() => {
