@@ -392,6 +392,11 @@ debug@^4.3.2, debug@~4.3.1, debug@~4.3.2:
   dependencies:
     ms "2.1.2"
 
+dont-crop@^0.2.0:
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/dont-crop/-/dont-crop-0.2.0.tgz#5e49c17c76d23fe0cc3c27f72d721505703493b4"
+  integrity sha512-e+sPCDg/iS1rR52WAQBh+qoAqM/EVf4kZim+hu1gvKeKb34eSEUCP0nSbb2xE8e2quL3Wd8KwBowlRpJ/iIu3Q==
+
 easyqrcodejs@^4.4.13:
   version "4.4.13"
   resolved "https://registry.yarnpkg.com/easyqrcodejs/-/easyqrcodejs-4.4.13.tgz#466c5e807751ae41d5f65cab08e4359f27c28b8e"

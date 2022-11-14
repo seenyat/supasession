@@ -28,7 +28,12 @@ interface update {
   };
 }
 Dayjs.extend(relativeTime);
-
+function checkLyricsPlus() {
+  return (
+    Spicetify.Config?.custom_apps?.includes("lyrics-plus") ||
+    !!document.querySelector("a[href='/lyrics-plus']")
+  );
+}
 interface TFullScreenProps {
   response: any;
 }
@@ -36,6 +41,7 @@ const FullScreen = ({ response }: TFullScreenProps) => {
   const [currentSong, setCurrentSong] = useState<any>(null);
   const [imageState, setImageState] = useState<any>();
   const { cursorXSpring, cursorYSpring } = useCursor();
+  const [lyricsRef, setLyricsRef] = useState<any>(null);
   const [qrCode, setQrCode] = useState<any>(null);
   const pausedMultiplier = useMotionValue(Spicetify.Player.isPlaying() ? 0 : 1);
   const springConfig = { damping: 25, stiffness: 700 };
@@ -45,16 +51,36 @@ const FullScreen = ({ response }: TFullScreenProps) => {
     pausedMultiplierSpring,
     (v: number) => `saturate(${1 - v})`
   );
-  const scale = useTransform(
-    pausedMultiplierSpring,
-    (v: number) => 1 - (1 + v) * 0.02
-  );
+  const scale = useTransform(pausedMultiplierSpring, (v: number) => {
+    const x = 1 - (1 + v) * 0.02;
+    return `scale(${x})`;
+  });
   const [users, setUsers] = useState<Array<{}>>([]);
 
   useEffect(() => {
-    setCurrentSong(Spicetify.Player.data.track);
+    const newSong = Spicetify.Player.data.track;
+    if (
+      !currentSong ||
+      newSong?.metadata?.title !== currentSong?.metadata.title
+    ) {
+      setCurrentSong(newSong);
+    }
     return () => {};
   }, [Spicetify.Player.data.track]);
+  useEffect(() => {
+    if (
+      Spicetify?.Config.custom_apps.includes("lyrics-plus") &&
+      checkLyricsPlus()
+    ) {
+      const lastApp = Spicetify.Platform.History.location.pathname;
+      if (document.webkitIsFullScreen) {
+        if (lastApp !== "/lyrics-plus") {
+          Spicetify.Platform.History.push("/lyrics-plus");
+        }
+      }
+    }
+    window.dispatchEvent(new Event("fad-request"));
+  }, [pausedMultiplier]);
   useEffect(() => {
     const update: (data: update) => void = ({ data }) => {
       pausedMultiplier.set(data.is_paused ? 1 : 0);
@@ -156,11 +182,11 @@ const FullScreen = ({ response }: TFullScreenProps) => {
           <motion.img
             whileHover={{ scale: 1.1 }}
             style={{
-              originX: 1,
+              originX: 0,
               originY: 1,
-              scale,
               filter,
             }}
+            whileTap={{ scale: 0.9 }}
             className={styles.cover}
             src={currentSong?.metadata.image_xlarge_url}
             alt=""
@@ -185,6 +211,7 @@ const FullScreen = ({ response }: TFullScreenProps) => {
         <div>{currentSong?.metadata.title}</div>
         <div>{currentSong?.metadata.album_artist_name}</div>
       </div>
+      <div id="fad-lyrics-plus-container" ref={lyricsRef}></div>
     </div>
   );
 };

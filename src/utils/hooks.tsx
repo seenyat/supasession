@@ -1,4 +1,4 @@
-import { useMotionValue, useSpring } from "framer-motion";
+import { useMotionValue, useSpring, useTransform } from "framer-motion";
 import { useEffect } from "react";
 
 export const useCursor = () => {

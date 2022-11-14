@@ -17,6 +17,7 @@
     "@nuintun/qrcode": "^3.3.0",
     "art-qr": "^0.1.2",
     "dayjs": "^1.11.6",
+    "dont-crop": "^0.2.0",
     "easyqrcodejs": "^4.4.13",
     "framer-motion": "^7.6.6",
     "socket.io-client": "^4.5.3"
