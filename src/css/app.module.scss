@@ -8,9 +8,12 @@
   width: 32px;
   height: 32px;
   border-radius: 16px;
-  background-color: #7fcbc3c9;
-  mix-blend-mode: difference;
+  background-color: #f5e9018a;
+  mix-blend-mode:exclusion;
   z-index: 30;
+}
+canvas{
+  width: 100%;
 }
 .supersession {
   display: flex;
@@ -93,9 +96,15 @@
     opacity: 1;
   }
 }
-
-.qr {
-  min-width: 200px;
+.images{
+  display: flex;
+  align-items: flex-end;
+}
+canvas {
+  vertical-align: bottom
+}
+.qr { 
+  max-width: 30%;
   opacity: 0.4;
   overflow: hidden;
   margin-left: 30px;

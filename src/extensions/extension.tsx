@@ -1,8 +1,14 @@
 import styles from '../css/app.module.scss'
+import { io } from "socket.io-client";
 
+const socket = io("ws://localhost:4512");
+socket.on("connect", () => {
+  console.log("connected");
+});
+socket.connect();
 (async () => {
   while (!Spicetify?.showNotification) {
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
 
   window.addEventListener("keydown", (e) => {
@@ -41,4 +47,4 @@ import styles from '../css/app.module.scss'
 
   // Show message on start.
   Spicetify.showNotification("Нныа!");
-})()
+})();
