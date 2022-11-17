@@ -22,6 +22,7 @@ import {
   useTransform,
 } from "framer-motion";
 import { useCursor } from "../../utils/hooks";
+import QRCode from "easyqrcodejs";
 interface update {
   data: {
     is_paused: boolean;
@@ -99,22 +100,24 @@ const FullScreen = ({ response }: TFullScreenProps) => {
 
     if (!qrCode) {
       const qr = new qrcode(code.current, {
-        text: `https://open.spotify.com/socialsession/${imageState}`,
-        width: 1000,
-        height: 1000,
+        text: imageState,
+        width: 2000,
+        height: 2000,
         dotScale: 1,
-        dotScaleTiming: 0.5,
+        dotScaleTiming: 1,
         dotScaleTiming_H: undefined,
         dotScaleTiming_V: undefined,
-        dotScaleA: 0.5,
+        dotScaleA: 1,
+        correctLevel: QRCode.CorrectLevel.L, // L, M, Q, H
         dotScaleAO: undefined,
         dotScaleAI: undefined,
       });
       setQrCode(qr);
     } else {
       // qrCode.clear();
-      qrCode.makeCode(`https://open.spotify.com/socialsession/${imageState}`);
+      qrCode.makeCode(imageState);
     }
+    console.log("qrCode", `imageState`);
   }, [code]);
 
   useEffect(() => {
