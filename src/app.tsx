@@ -1,21 +1,9 @@
 import styles from "./css/app.module.scss";
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom";
-import FullScreen from "./components/FullScreen/FullScreen";
-import { motion } from "framer-motion";
-import { useCursor } from "./utils/hooks";
-
-export const getSessionMembers = async (join_session_token: string) => {
-  try {
-    const response = await Spicetify.CosmosAsync.get(
-      `https://spclient.wg.spotify.com/social-connect/v2/sessions/info/${join_session_token}`
-    );
-    return response["session_members"];
-  } catch (ex) {
-    return null;
-  }
-  return null;
-};
+import FullScreen, { doc } from './components/FullScreen/FullScreen';
+import { motion } from 'framer-motion';
+import { useCursor } from './utils/hooks';
 
 export const App = () => {
   const buildURL = (url: string, queryParams: any) => {
@@ -30,8 +18,8 @@ export const App = () => {
   const local_device_id = Spicetify.Player.data.play_origin.device_identifier;
 
   const endpoint = buildURL(
-    "https://spclient.wg.spotify.com/social-connect/v2/sessions/current_or_new",
-    { local_device_id: local_device_id, type: "REMOTE" }
+    'https://spclient.wg.spotify.com/social-connect/v2/sessions/current_or_new',
+    { local_device_id: local_device_id, type: 'REMOTE' }
   );
   useEffect(() => {
     Spicetify.CosmosAsync.get(endpoint).then((data) => setResponse(data));
@@ -46,10 +34,10 @@ export const App = () => {
       `.${styles.supersession}.${styles.overlay}`
     );
     if (!container) {
-      console.log("no container");
+      console.log('no container');
       return;
     }
-    if (document.webkitIsFullScreen) {
+    if (doc.webkitIsFullScreen) {
       document.exitFullscreen();
       container.classList.add(styles.hidden);
     } else {
@@ -95,7 +83,7 @@ export const App = () => {
           className={`${styles.button} ${styles.large}`}
           onClick={fsHandler}
         >
-          {"Enter full Screen"}
+          {'Enter full Screen'}
         </motion.button>
       </div>
     </>

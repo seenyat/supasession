@@ -1,1 +1,4 @@
-{}
+{
+  "autoformat": true,
+  "singleQuote": true
+}

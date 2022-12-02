@@ -174,6 +174,11 @@
   resolved "https://registry.yarnpkg.com/@types/node/-/node-17.0.45.tgz#2c0fafd78705e7a18b7906b5201a522719dc5190"
   integrity sha512-w+tIMs3rq2afQdsPJlODhoUEKzFP1ayaoyl1CcnwtIlsVe7K7bA1NGm4s3PraqTLlXnbIN84zuBlxBWo1u9BLw==
 
+"@types/offscreencanvas@^2019.7.0":
+  version "2019.7.0"
+  resolved "https://registry.yarnpkg.com/@types/offscreencanvas/-/offscreencanvas-2019.7.0.tgz#e4a932069db47bb3eabeb0b305502d01586fa90d"
+  integrity sha512-PGcyveRIpL1XIqK8eBsmRBt76eFgtzuPiSTyKHZxnGemp2yzGzWpjYKAfK3wIMiU7eH+851yEpiuP8JZerTmWg==
+
 "@types/prop-types@*":
   version "15.7.5"
   resolved "https://registry.yarnpkg.com/@types/prop-types/-/prop-types-15.7.5.tgz#5f19d2b85a98e9558036f6a3cacc8819420f05cf"
@@ -602,6 +607,13 @@ extend-shallow@^2.0.1:
   integrity sha512-zCnTtlxNoAiDc3gqY2aYAWFx7XWWiasuF2K8Me5WbN8otHKTUKBwjPtNpRs/rbUZm7KxWAaNj7P1a/p52GbVug==
   dependencies:
     is-extendable "^0.1.0"
+
+fast-average-color@^9.1.1:
+  version "9.1.1"
+  resolved "https://registry.yarnpkg.com/fast-average-color/-/fast-average-color-9.1.1.tgz#7b2cb70a904b848e7d347b3e3612fbd84a535ca2"
+  integrity sha512-PJizLBcGb/jqUzrH66385te4+GcOK7wcUiCDvBUszdpzc/pvV1kwifvvsFygV3mS+7qwnWmK9/BrZniaOOC9ag==
+  dependencies:
+    "@types/offscreencanvas" "^2019.7.0"
 
 fill-range@^7.0.1:
   version "7.0.1"

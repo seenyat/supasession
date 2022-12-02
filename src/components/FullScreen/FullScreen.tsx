@@ -1,62 +1,78 @@
-import styles from "../../css/app.module.scss";
-import React, { ForwardedRef, useEffect, useState } from "react";
+import styles from '../../css/app.module.scss';
+import React, { useEffect, useState } from 'react';
+import Dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import {
-  Encoder,
-  QRByte,
-  QRKanji,
-  ErrorCorrectionLevel,
-} from "@nuintun/qrcode";
-const qrCode = new Encoder();
-import ArtQR from "art-qr";
-import qrcode from "easyqrcodejs";
-import { getSessionMembers } from "../../app";
-import Dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
-import dayjs from "dayjs";
-let MyQRInstance: any;
-import {
-  motion,
-  Reorder,
-  useMotionValue,
-  useSpring,
-  useTransform,
-} from "framer-motion";
-import { useCursor } from "../../utils/hooks";
-import QRCode from "easyqrcodejs";
+  useCursor,
+  useLyricsPlus,
+  useQRCode,
+  useQueue,
+  useSessionMembers,
+} from '../../utils/hooks';
+import UserCard from '../UserCard/UserCard';
+import { FastAverageColor } from 'fast-average-color';
+
+const fac = new FastAverageColor();
 interface update {
   data: {
     is_paused: boolean;
   };
 }
-Dayjs.extend(relativeTime);
-function checkLyricsPlus() {
-  return (
-    Spicetify.Config?.custom_apps?.includes("lyrics-plus") ||
-    !!document.querySelector("a[href='/lyrics-plus']")
-  );
+
+interface Document {
+  mozCancelFullScreen?: () => Promise<void>;
+  msExitFullscreen?: () => Promise<void>;
+  webkitExitFullscreen?: () => Promise<void>;
+  mozFullScreenElement?: Element;
+  msFullscreenElement?: Element;
+  webkitFullscreenElement?: Element;
 }
+
+interface HTMLElement {
+  msRequestFullscreen?: () => Promise<void>;
+  mozRequestFullscreen?: () => Promise<void>;
+  webkitRequestFullscreen?: () => Promise<void>;
+}
+// Define an interface that extends the Document interface and adds the webkitIsFullScreen property
+interface WebkitDocument extends Document {
+  webkitIsFullScreen: boolean;
+}
+
+// Use the WebkitDocument interface as the type for the document object
+export const doc: WebkitDocument = document as unknown as WebkitDocument;
+Dayjs.extend(relativeTime);
+
 interface TFullScreenProps {
   response: any;
 }
 const FullScreen = ({ response }: TFullScreenProps) => {
   const [currentSong, setCurrentSong] = useState<any>(null);
-  const [imageState, setImageState] = useState<any>();
+  const [sessionUrl, setSessionUrl] = useState<any>('');
   const { cursorXSpring, cursorYSpring } = useCursor();
   const [lyricsRef, setLyricsRef] = useState<any>(null);
-  const [qrCode, setQrCode] = useState<any>(null);
   const pausedMultiplier = useMotionValue(Spicetify.Player.isPlaying() ? 0 : 1);
   const springConfig = { damping: 25, stiffness: 700 };
-  const code = React.createRef<HTMLDivElement>();
   const pausedMultiplierSpring = useSpring(pausedMultiplier, springConfig);
   const filter = useTransform(
     pausedMultiplierSpring,
     (v: number) => `saturate(${1 - v})`
   );
-  const scale = useTransform(pausedMultiplierSpring, (v: number) => {
-    const x = 1 - (1 + v) * 0.02;
-    return `scale(${x})`;
-  });
-  const [users, setUsers] = useState<Array<{}>>([]);
+  const { queue } = useQueue();
+  const [qrColor, setQrColor] = useState<string>('');
+  const coverSelector = styles.cover || '';
+
+  useEffect(() => {
+    fac
+      .getColorAsync(document.querySelector('img'))
+      .then((color) => {
+        setQrColor(color.hex);
+        console.log({ color: color.hex });
+      })
+      .catch((e) => {
+        console.log(e);
+      });
+  }, [queue]);
 
   useEffect(() => {
     const newSong = Spicetify.Player.data.track;
@@ -68,151 +84,112 @@ const FullScreen = ({ response }: TFullScreenProps) => {
     }
     return () => {};
   }, [Spicetify.Player.data.track]);
-  useEffect(() => {
-    if (
-      Spicetify?.Config.custom_apps.includes("lyrics-plus") &&
-      checkLyricsPlus()
-    ) {
-      const lastApp = Spicetify.Platform.History.location.pathname;
-      if (document.webkitIsFullScreen) {
-        if (lastApp !== "/lyrics-plus") {
-          Spicetify.Platform.History.push("/lyrics-plus");
-        }
-      }
-    }
-    window.dispatchEvent(new Event("fad-request"));
-  }, [pausedMultiplier]);
+
+  useLyricsPlus();
+
   useEffect(() => {
     const update: (data: update) => void = ({ data }) => {
       pausedMultiplier.set(data.is_paused ? 1 : 0);
     };
     // @ts-ignore
-    Spicetify.Player.addEventListener("onplaypause", update);
+    Spicetify.Player.addEventListener('onplaypause', update);
     // @ts-ignore
-    return () => Spicetify.Player.removeEventListener("onplaypause", update);
+    return () => Spicetify.Player.removeEventListener('onplaypause', update);
+  }, []);
+
+  const { qrCode } = useQRCode({ sessionUrl });
+
+  const users = useSessionMembers({
+    joinSessionToken: response?.join_session_token,
   });
 
-  useEffect(() => {
-    // return;
-    if (!response || !response["join_session_token"] || code.current === null) {
-      return;
-    }
-
-    if (!qrCode) {
-      const qr = new qrcode(code.current, {
-        text: imageState,
-        width: 2000,
-        height: 2000,
-        dotScale: 1,
-        dotScaleTiming: 1,
-        dotScaleTiming_H: undefined,
-        dotScaleTiming_V: undefined,
-        dotScaleA: 1,
-        correctLevel: QRCode.CorrectLevel.L, // L, M, Q, H
-        dotScaleAO: undefined,
-        dotScaleAI: undefined,
-      });
-      setQrCode(qr);
-    } else {
-      // qrCode.clear();
-      qrCode.makeCode(imageState);
-    }
-    console.log("qrCode", `imageState`);
-  }, [code]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      getSessionMembers(response?.join_session_token).then((data) => {
-        setUsers(data);
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [response]);
-
-  const img = new Image();
   useEffect(() => {
     console.log({ currentSong });
     if (!response || !currentSong) {
       return;
     }
-    // img.crossOrigin = "Anonymous";
-    // img.src = currentSong.metadata.image_large_url;
-    // img.onload = () => {
-    //   MyQRInstance = new ArtQR().create({
-    //     text: `https://open.spotify.com/socialsession/${response.join_session_token}`,
-    //     size: 300,
-    //     margin: 10,
-    //     backgroundImage: img,
-    //     callback: function (dataUri:string) {
-    //       console.log('123',dataUri)
-    //     },
-    //     bindElement: 'qr' // id of <img /> in real dom
-    //   });
-    // }
 
-    setImageState(
+    setSessionUrl(
       `https://open.spotify.com/socialsession/${response.join_session_token}`
     );
   }, [response, currentSong]);
+  console.log(queue);
 
   return (
     <div className={styles.container}>
-      <div className={styles.session}>
-        <Reorder.Group axis="y" values={users} onReorder={setUsers}>
-          {users?.length > 0 &&
-            users.map((user: any) => (
-              <Reorder.Item key={user.user_id} value={user}>
-                <div className={styles.user_card} key={user.user_id}>
-                  <span className={styles.username}>
-                    {user.display_name}
-                    {(user.display_name as string)
-                      .toLowerCase()
-                      .includes("alex") && " С др!"}
-                  </span>
-                  <span className={styles.seconds}>
-                    {user && dayjs(+user.joined_timestamp).fromNow()}
-                  </span>
-                </div>
-              </Reorder.Item>
-            ))}
-        </Reorder.Group>
+      <div className={styles.queue}>
+        {queue.next &&
+          queue.next.map((el, i) => (
+            <div className={styles.queue_card}>
+              <img
+                className={styles.queueCover}
+                src={el.contextTrack?.metadata.image_url}
+                alt=""
+              />
+              <div className={styles.indexNum}>
+                <div>{i + 1}</div>
+              </div>
+              <div className={styles.queue_meta}>
+                <div>{el.contextTrack?.metadata?.title}</div>
+                <div>{el.contextTrack?.metadata?.artist_name}</div>
+              </div>
+            </div>
+          ))}
       </div>
-      <div>
-        {/* {img && JSON.stringify(img)} */}
-
-        {/* {imageState && imageState} */}
-        <div className={styles.images}>
+      <div className={styles.meta}>
+        <div className={styles.session}>
+          {users &&
+            users.length > 0 &&
+            users.map((user: any) => <UserCard user={user} />)}
+        </div>
+        <div className={styles.blurContainer}>
           <motion.img
-            whileHover={{ scale: 1.1 }}
-            style={{
-              originX: 0,
-              originY: 1,
-              filter,
-            }}
-            whileTap={{ scale: 0.9 }}
-            className={styles.cover}
+            className={styles.backgroundImage}
             src={currentSong?.metadata.image_xlarge_url}
             alt=""
+            style={{
+              filter,
+            }}
           />
-          <motion.div
-            whileHover={{ opacity: 1, scale: 1.3 }}
-            whileTap={{ transform: "rotate(90deg)" }}
-            className={styles.qr}
-            style={{ originX: 0, originY: 1 }}
-          >
-            <div alt="" ref={code} srcset="" />
-          </motion.div>
         </div>
-        <motion.div
-          className={styles.cursor}
-          style={{
-            translateX: cursorXSpring,
-            translateY: cursorYSpring,
-          }}
-        />
-        <div>{currentSong?.metadata.album_title}</div>
-        <div>{currentSong?.metadata.title}</div>
-        <div>{currentSong?.metadata.album_artist_name}</div>
+        <div>
+          <div className={styles.images}>
+            <motion.img
+              whileHover={{ scale: 1.1 }}
+              style={{
+                originX: 0,
+                originY: 1,
+                filter,
+              }}
+              whileTap={{ scale: 0.9 }}
+              className={styles.cover}
+              src={currentSong?.metadata.image_xlarge_url}
+            />
+            {qrCode && (
+              <motion.img
+                whileHover={{ scale: 1.2 }}
+                style={{
+                  originX: 0,
+                  originY: 1,
+                  backgroundColor: qrColor || 'white',
+                }}
+                src={qrCode}
+                className={styles.qrCode}
+                whileTap={{ scale: 0.9 }}
+              />
+            )}
+          </div>
+          <motion.div
+            className={styles.cursor}
+            style={{
+              translateX: cursorXSpring,
+              translateY: cursorYSpring,
+            }}
+          />
+          <div>{currentSong?.metadata.album_title}</div>
+          <div className={styles.title}>{currentSong?.metadata.title}</div>
+          <div>{currentSong?.metadata.album_artist_name}</div>
+        </div>
       </div>
       <div id="fad-lyrics-plus-container" ref={lyricsRef}></div>
     </div>
