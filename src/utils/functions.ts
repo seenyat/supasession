@@ -10,6 +10,16 @@ export const getSessionMembers = async (join_session_token: string) => {
   return null;
 };
 
+export const setColorOpacity = (opacity: number, color: string): string => {
+  if (!color || typeof color !== 'string') {
+    return '';
+  }
+  const matchedColors = color.match(/\d+/g);
+  const [r, g, b] = matchedColors || [0, 0, 0];
+
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+};
+
 export const checkLyricsPlus = () => {
   return (
     Spicetify.Config?.custom_apps?.includes('lyrics-plus') ||

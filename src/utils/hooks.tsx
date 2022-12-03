@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 import { checkLyricsPlus, getSessionMembers } from './functions';
 import { doc } from '../components/FullScreen/FullScreen';
 import { generateQRCode } from './api';
+import { FastAverageColor } from 'fast-average-color';
+
+const fac = new FastAverageColor();
 
 type UseQRCodeParams = {
   sessionUrl: string;
@@ -12,6 +15,16 @@ type UseQRCodeReturn = {
   qrCode: string;
 };
 
+type Color = {
+  hex: string;
+  rgba: string;
+};
+
+type UseQrColorParams = {
+  qrCode: string;
+};
+
+type UseQrColorResult = [string];
 // Define the type for the hook's parameters
 type UseSessionMembersParams = {
   joinSessionToken: string;
@@ -116,4 +129,38 @@ export const useLyricsPlus = () => {
     }
     window.dispatchEvent(new Event('fad-request'));
   }, [Spicetify.Player.data.track, doc.webkitIsFullScreen]);
+};
+
+export const useQrColor = (
+  {
+    imgRef,
+  }: {
+    imgRef: React.RefObject<HTMLImageElement>;
+  },
+  queue: object
+): UseQrColorResult => {
+  const [qrColor, setQrColor] = useState<string>('');
+
+  const x = document.querySelector('.queue_cover') as HTMLImageElement;
+
+  useEffect(() => {
+    console.log(x);
+    if (!imgRef.current) {
+      return;
+    }
+
+    setTimeout(() => {
+      fac
+        .getColorAsync(x)
+        .then((color: Color) => {
+          setQrColor(color.rgba);
+          console.log({ color: color.hex });
+        })
+        .catch(() => {
+          throw 'Error parsing QR code';
+        });
+    }, 20);
+  }, [fac, imgRef, queue]);
+
+  return [qrColor];
 };

@@ -1,5 +1,5 @@
 import styles from '../../css/app.module.scss';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
@@ -7,13 +7,14 @@ import {
   useCursor,
   useLyricsPlus,
   useQRCode,
+  useQrColor,
   useQueue,
   useSessionMembers,
 } from '../../utils/hooks';
 import UserCard from '../UserCard/UserCard';
-import { FastAverageColor } from 'fast-average-color';
+import { Track } from '../../types/types';
+import { setColorOpacity } from '../../utils/functions';
 
-const fac = new FastAverageColor();
 interface update {
   data: {
     is_paused: boolean;
@@ -53,26 +54,16 @@ const FullScreen = ({ response }: TFullScreenProps) => {
   const [lyricsRef, setLyricsRef] = useState<any>(null);
   const pausedMultiplier = useMotionValue(Spicetify.Player.isPlaying() ? 0 : 1);
   const springConfig = { damping: 25, stiffness: 700 };
+  const imgRef = useRef<HTMLImageElement>(null);
   const pausedMultiplierSpring = useSpring(pausedMultiplier, springConfig);
   const filter = useTransform(
     pausedMultiplierSpring,
     (v: number) => `saturate(${1 - v})`
   );
-  const { queue } = useQueue();
-  const [qrColor, setQrColor] = useState<string>('');
   const coverSelector = styles.cover || '';
+  const { queue } = useQueue();
 
-  useEffect(() => {
-    fac
-      .getColorAsync(document.querySelector('img'))
-      .then((color) => {
-        setQrColor(color.hex);
-        console.log({ color: color.hex });
-      })
-      .catch((e) => {
-        console.log(e);
-      });
-  }, [queue]);
+  const [qrColor] = useQrColor({ imgRef }, queue);
 
   useEffect(() => {
     const newSong = Spicetify.Player.data.track;
@@ -119,8 +110,41 @@ const FullScreen = ({ response }: TFullScreenProps) => {
     <div className={styles.container}>
       <div className={styles.queue}>
         {queue.next &&
-          queue.next.map((el, i) => (
-            <div className={styles.queue_card}>
+          queue.next.map((el: Track, i: number) => (
+            <div
+              style={{
+                transform: `scale(${1 - i * 0.05}) translateX(${-(
+                  i ** 1.035
+                )}px)`,
+              }}
+              className={styles.queue_card}
+            >
+              <img
+                className={styles.queueCover}
+                src={el.contextTrack?.metadata.image_url}
+                alt=""
+              />
+              <div className={styles.indexNum}>
+                <div>{i + 1}</div>
+              </div>
+              <div className={styles.queue_meta}>
+                <div>{el.contextTrack?.metadata?.title}</div>
+                <div>{el.contextTrack?.metadata?.artist_name}</div>
+              </div>
+            </div>
+          ))}
+      </div>
+      <div className={styles.queue_prev}>
+        {queue.next &&
+          [...queue.prev].reverse().map((el: Track, i: number) => (
+            <div
+              style={{
+                transform: `scale(${1 - i * 0.05}) translateX(${-(
+                  i ** 1.035
+                )}px)`,
+              }}
+              className={styles.queue_card}
+            >
               <img
                 className={styles.queueCover}
                 src={el.contextTrack?.metadata.image_url}
@@ -142,13 +166,17 @@ const FullScreen = ({ response }: TFullScreenProps) => {
             users.length > 0 &&
             users.map((user: any) => <UserCard user={user} />)}
         </div>
-        <div className={styles.blurContainer}>
+        <div
+          style={{ backgroundColor: setColorOpacity(0.5, qrColor) }}
+          className={styles.blurContainer}
+        >
           <motion.img
             className={styles.backgroundImage}
             src={currentSong?.metadata.image_xlarge_url}
             alt=""
             style={{
               filter,
+              backgroundImage: qrColor,
             }}
           />
         </div>
@@ -162,21 +190,25 @@ const FullScreen = ({ response }: TFullScreenProps) => {
                 filter,
               }}
               whileTap={{ scale: 0.9 }}
-              className={styles.cover}
+              className={`${styles.cover} queue_cover`}
+              ref={imgRef}
               src={currentSong?.metadata.image_xlarge_url}
             />
             {qrCode && (
-              <motion.img
-                whileHover={{ scale: 1.2 }}
-                style={{
-                  originX: 0,
-                  originY: 1,
-                  backgroundColor: qrColor || 'white',
-                }}
-                src={qrCode}
-                className={styles.qrCode}
-                whileTap={{ scale: 0.9 }}
-              />
+              <div style={{ backgroundColor: 'white ' }}>
+                <motion.img
+                  whileHover={{ scale: 1.2 }}
+                  style={{
+                    originX: 0,
+                    originY: 1,
+                    width: '100%',
+                    backgroundColor: qrColor || 'white',
+                  }}
+                  src={qrCode}
+                  className={styles.qrCode}
+                  whileTap={{ scale: 0.9 }}
+                />
+              </div>
             )}
           </div>
           <motion.div
@@ -191,7 +223,11 @@ const FullScreen = ({ response }: TFullScreenProps) => {
           <div>{currentSong?.metadata.album_artist_name}</div>
         </div>
       </div>
-      <div id="fad-lyrics-plus-container" ref={lyricsRef}></div>
+      <div
+        id="fad-lyrics-plus-container"
+        style={{ flexGrow: 0 }}
+        ref={lyricsRef}
+      ></div>
     </div>
   );
 };

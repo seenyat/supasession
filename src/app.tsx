@@ -1,9 +1,9 @@
 import styles from "./css/app.module.scss";
-import React, { useEffect, useState } from "react";
-import ReactDOM from "react-dom";
+import React, { useEffect, useRef, useState } from 'react';
+import ReactDOM from 'react-dom';
 import FullScreen, { doc } from './components/FullScreen/FullScreen';
 import { motion } from 'framer-motion';
-import { useCursor } from './utils/hooks';
+import { useCursor, useQrColor, useQueue } from './utils/hooks';
 
 export const App = () => {
   const buildURL = (url: string, queryParams: any) => {
@@ -13,7 +13,6 @@ export const App = () => {
 
   const [state, setState] = useState(0);
   const [response, setResponse] = useState();
-  const { cursorXSpring, cursorYSpring } = useCursor();
 
   const local_device_id = Spicetify.Player.data.play_origin.device_identifier;
 
@@ -28,6 +27,10 @@ export const App = () => {
   const onButtonClick = () => {
     setState(state + 1);
   };
+
+  const { queue } = useQueue();
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [qrColor] = useQrColor({ imgRef }, queue);
 
   const fsHandler = () => {
     const container = document.querySelector(
@@ -71,7 +74,7 @@ export const App = () => {
 
   return (
     <>
-      <div className={styles.supersession}>
+      <div style={{ backgroundColor: qrColor }} className={styles.supersession}>
         <motion.div
           whileHover={{ opacity: 1 }}
           className={styles.tab_container}
