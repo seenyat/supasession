@@ -24,7 +24,7 @@ type UseQrColorParams = {
   qrCode: string;
 };
 
-type UseQrColorResult = [string];
+type UseQrColorResult = [string, string];
 // Define the type for the hook's parameters
 type UseSessionMembersParams = {
   joinSessionToken: string;
@@ -110,7 +110,7 @@ export const useQRCode = ({ sessionUrl }: UseQRCodeParams): UseQRCodeReturn => {
     if (sessionUrl) {
       const link = generateQRCode(sessionUrl, 500);
       setQrCode(link);
-      console.log({ sessionState: sessionState.current, sessionUrl, qrCode });
+      // console.log({ sessionState: sessionState.current, sessionUrl, qrCode });
     }
   }, [sessionUrl]);
 
@@ -140,27 +140,26 @@ export const useQrColor = (
   queue: object
 ): UseQrColorResult => {
   const [qrColor, setQrColor] = useState<string>('');
-
-  const x = document.querySelector('.queue_cover') as HTMLImageElement;
+  const [hexColor, setHexColor] = useState<string>('');
 
   useEffect(() => {
-    console.log(x);
     if (!imgRef.current) {
       return;
     }
 
     setTimeout(() => {
       fac
-        .getColorAsync(x)
+        .getColorAsync(imgRef.current)
         .then((color: Color) => {
           setQrColor(color.rgba);
-          console.log({ color: color.hex });
+          setHexColor(color.hex);
+          // console.log({ color: color.hex });
         })
         .catch(() => {
           throw 'Error parsing QR code';
         });
-    }, 20);
+    }, 100);
   }, [fac, imgRef, queue]);
 
-  return [qrColor];
+  return [qrColor, hexColor];
 };

@@ -1,24 +1,23 @@
-
-.cursor{
+.cursor {
   position: absolute;
   display: none;
   pointer-events: none;
   left: 0;
   top: 0;
   display: none;
-  width: 32px;
-  height: 32px;
-  opacity: .1;
+  width: 12px;
+  height: 12px;
+  opacity: 0.5;
   border-radius: 16px;
   background-color: #f5e9018a;
-  mix-blend-mode:exclusion;
-  z-index: 60;
+  mix-blend-mode: exclusion;
+  // z-index: 999999999999999;
 }
-canvas{
+canvas {
   width: 100%;
 }
 .supersession {
-  --lyrics-color-active: #FFFFFE;
+  --lyrics-color-active: #fffffe;
   --lyrics-color-inactive: #ffffff50;
   display: flex;
   justify-content: center;
@@ -31,51 +30,37 @@ canvas{
   flex-direction: column;
   z-index: 2; // This is the important part
 }
-.fullscreen_container{
+.fullscreen_container {
   cursor: none;
   width: 100%;
-  background-color: rgb(4,21,35);
+  background-color: rgb(4, 21, 35);
   text-align: center;
   & .cursor {
     display: block;
   }
 }
-.blurContainer {
-  filter: blur(5px);
-  -webkit-filter: blur(5px);
-  -moz-filter: blur(5px);
-  -o-filter: blur(5px);
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100%;
-  -ms-filter: blur(5px);
-}
 .tab_container {
-    max-width: 1080px;
-    opacity: 0.8;
+  max-width: 1080px;
+  opacity: 0.8;
 }
 .title {
   font-size: 2.5em;
   line-height: 1.2;
   font-weight: 700;
-  color: #fff;
   margin-bottom: 0.2em;
 }
 .fullscreen_container {
-  .container{
+  .container {
     display: grid;
     margin: 0 50px;
     text-align: left;
   }
 }
-.meta{
+.meta {
   display: grid;
   grid-template-columns: 1fr 4fr;
 }
-.container{
+.container {
   display: grid;
   margin: 0 40px;
   grid-template-columns: 5fr 3fr;
@@ -83,10 +68,13 @@ canvas{
   align-items: center;
 }
 
-
 .session {
   display: flex;
   flex-direction: column;
+  padding-right: 15px;
+  margin-right: 20px;
+  z-index: 9999999999999;
+  min-width: 0;
   justify-content: flex-end;
   align-items: flex-start;
 }
@@ -113,7 +101,7 @@ canvas{
   width: 50%;
   z-index: 50;
 }
-.close{
+.close {
   height: 40px;
   width: 40px;
   position: absolute;
@@ -122,7 +110,7 @@ canvas{
   opacity: 0.1;
   transition: 50ms all ease;
   cursor: pointer;
-  &:hover{
+  &:hover {
     opacity: 1;
   }
 }
@@ -141,9 +129,8 @@ canvas{
     font-size: 12px;
     left: 0px;
     position: absolute;
-    opacity: .4;
-    color: white;
- }
+    opacity: 0.4;
+  }
 }
 
 .queue {
@@ -155,10 +142,9 @@ canvas{
   gap: 30px;
   scrollbar-color: transparent;
   scrollbar-width: none;
+  z-index: 9999999999999;
   left: 213px;
   max-width: calc(100vh - -390px);
-  overflow: auto;
-
 }
 .queue_prev {
   position: absolute;
@@ -167,12 +153,65 @@ canvas{
   justify-content: stretch;
   width: max-content;
   gap: 30px;
-  z-index: 9999999999;
+  z-index: 9999999999999;
   scrollbar-color: transparent;
   scrollbar-width: none;
   left: 213px;
   max-width: calc(100vh - -390px);
-  overflow: auto;
+  .indexNum {
+    margin-left: -25px;
+  }
+}
+@keyframes gradient {
+  0% {
+    background-position: 0 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+@-webkit-keyframes gradient {
+  0% {
+    background-position: 0 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+.backgroundBlur {
+  &::before {
+    content: '';
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-size: 15px 15px;
+    backdrop-filter: brightness(90%) blur(20px);
+    -webkit-mask-image: repeating-radial-gradient(
+      circle at 50% 50%,
+      var(--background),
+      var(--background) 20px,
+      rgba(255, 255, 255, 0.3) 20.5px,
+      rgba(255, 255, 255, 0.3) 21px
+    );
+  }
+}
+.blurContainer {
+  position: absolute;
+  opacity: 1;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
 }
 
 .queue::-webkit-scrollbar {
@@ -189,7 +228,7 @@ canvas{
 
 .queue_prev:hover::-webkit-scrollbar-thumb {
   background: #dcdcdc;
-  opacity: .5;
+  opacity: 0.5;
 }
 
 .queue_prev::-webkit-scrollbar-track {
@@ -202,22 +241,20 @@ canvas{
 
 .queue_prev:hover::-webkit-scrollbar-thumb {
   background: #dcdcdc;
-  opacity: .5;
+  opacity: 0.5;
 }
-.images{
+.images {
   display: flex;
   align-items: flex-end;
   margin-bottom: 20px;
 }
 canvas {
-  vertical-align: bottom
+  vertical-align: bottom;
 }
 .qrCode {
-  width: 40%;
+  width: 100%;
   z-index: 99999999999;
   opacity: 1;
-  margin-left: 30px;
-  padding: 5px;
   display: block;
 }
 .queueCover {
@@ -228,7 +265,7 @@ canvas {
   opacity: 0.5;
 }
 .queue_card {
-  background-color: rgba(255,255,255,.075);
+  background-color: rgba(255, 255, 255, 0.075);
   border-radius: 3px;
   padding: 0;
   max-width: 270px;
@@ -242,7 +279,9 @@ canvas {
   display: flex;
   flex-direction: column;
   font-size: 12px;
+  z-index: 9999999999999;
   justify-content: center;
+  position: relative;
   text-align: right;
   align-items: flex-end;
   padding-right: 15px;
@@ -255,11 +294,13 @@ canvas {
 .title {
   font-size: 50px;
 }
-.large{
+.large {
   font-size: 24px;
 }
 .backgroundImage {
   width: 100%;
+  max-height: 100vh;
+  overflow: hidden;
   opacity: 0.1;
 }
 .button {
@@ -269,7 +310,8 @@ canvas {
   color: white;
   border-radius: 10px;
   font-size: 32px;
-  border:none;
+  z-index: 9999999999999;
+  border: none;
   background: transparent;
   transition: 50ms all ease;
   opacity: 0.8;
@@ -277,7 +319,7 @@ canvas {
 
   &:hover {
     opacity: 1;
-    background-color: rgb(255,255,255, .1);
+    background-color: rgb(255, 255, 255, 0.1);
   }
 
   &:active {
@@ -293,4 +335,11 @@ canvas {
 }
 :global(.lyrics-versionSelector) {
   display: none !important;
+}
+:global(.lyrics-lyricsContainer-LyricsUnavailableMessage) {
+  font-size: 30px;
+  margin: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding: 0;
 }
