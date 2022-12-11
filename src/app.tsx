@@ -1,4 +1,4 @@
-import styles from "./css/app.module.scss";
+import styles from './css/app.module.scss';
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import FullScreen, { doc } from './components/FullScreen/FullScreen';

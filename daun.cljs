@@ -1,0 +1,1 @@
+(.. (js/fetch "https://random-data-api.com/api/users/random_user") (then (fn [res] (. res (json)))) (then (fn [res] (println res))))
