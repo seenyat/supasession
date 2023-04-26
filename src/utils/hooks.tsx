@@ -1,9 +1,10 @@
-import { useMotionValue, useSpring } from 'framer-motion';
+import { useSpring } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { checkLyricsPlus, getSessionMembers } from './functions';
 import { doc } from '../components/FullScreen/FullScreen';
 import { generateQRCode } from './api';
 import { FastAverageColor } from 'fast-average-color';
+import Queue from '../components/Blocks/Queue.tsx/Queue';
 
 const fac = new FastAverageColor();
 
@@ -36,19 +37,29 @@ type User = {
   joined_timestamp: number;
 };
 
-export const useQueue = () => {
+export const useQueue = (): {
+  queue: {
+    next: any[];
+    prev: any[];
+    current: any;
+  };
+} => {
+  // console.log(Queue);
   const [queue, setQueue] = useState<any>({
-    next: Spicetify.Queue.nextTracks,
-    prev: Spicetify.Queue.prevTracks,
+    next: [...Spicetify.Queue.nextTracks],
+    prev: [...Spicetify.Queue.prevTracks],
+    current: { ...Spicetify.Queue?.track },
   });
   useEffect(() => {
     Spicetify.Platform.PlayerAPI._events.addListener(
       'queue_update',
       (data: any) => {
-        setQueue({
-          next: Spicetify.Queue.nextTracks,
-          prev: Spicetify.Queue.prevTracks,
-        });
+        const queue = JSON.parse(JSON.stringify(Spicetify.Queue));
+        setQueue((state) => ({
+          current: { ...queue.track },
+          next: [...queue.nextTracks],
+          prev: [state.current],
+        }));
       }
     );
     return () => {
@@ -59,27 +70,6 @@ export const useQueue = () => {
     };
   }, []);
   return { queue };
-};
-
-export const useCursor = () => {
-  const cursorX = useMotionValue(-100);
-  const cursorY = useMotionValue(-100);
-  const springConfig = { damping: 25, stiffness: 700 };
-  const cursorXSpring = useSpring(cursorX, springConfig);
-  const cursorYSpring = useSpring(cursorY, springConfig);
-  useEffect(() => {
-    const moveCursor = (e: any) => {
-      cursorX.set(e.clientX - 16);
-      cursorY.set(e.clientY - 16);
-    };
-
-    window.addEventListener('mousemove', moveCursor);
-
-    return () => {
-      window.removeEventListener('mousemove', moveCursor);
-    };
-  }, []);
-  return { cursorXSpring, cursorYSpring };
 };
 
 // Define the useSessionMembers hook
@@ -143,22 +133,20 @@ export const useQrColor = (
   const [hexColor, setHexColor] = useState<string>('');
 
   useEffect(() => {
-    if (!imgRef.current) {
-      return;
-    }
-
     setTimeout(() => {
+      if (!imgRef.current) {
+        return;
+      }
       fac
         .getColorAsync(imgRef.current)
         .then((color: Color) => {
           setQrColor(color.rgba);
           setHexColor(color.hex);
-          // console.log({ color: color.hex });
         })
         .catch(() => {
           throw 'Error parsing QR code';
         });
-    }, 100);
+    }, 200);
   }, [fac, imgRef, queue]);
 
   return [qrColor, hexColor];
