@@ -50,3 +50,16 @@ export const getContrastColor = (color: string): string => {
   // otherwise, return white
   return luminance >= 0.5 ? 'black' : 'white';
 };
+
+export function beatDurationInMilliseconds(
+  tempo: number,
+  timeSignatureNumerator: number
+): number {
+  // Make an assumption for the time signature denominator
+  const timeSignatureDenominator = 4;
+
+  // Calculate the duration of one beat in milliseconds
+  const beatDuration = (60 / tempo) * 1000;
+
+  return beatDuration;
+}

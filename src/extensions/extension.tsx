@@ -1,4 +1,4 @@
-import styles from '../css/app.module.scss'
+import styles from '../css/app.module.scss';
 import { doc } from '../components/FullScreen/FullScreen';
 
 (async () => {
@@ -12,7 +12,7 @@ import { doc } from '../components/FullScreen/FullScreen';
         `.${styles.supersession}.${styles.overlay}`
       );
       if (!container) {
-        console.log('no container');
+        // console.log('no container');
         return;
       }
       if (doc.webkitIsFullScreen) {

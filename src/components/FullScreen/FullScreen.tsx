@@ -11,7 +11,6 @@ import {
   useTransform,
 } from 'framer-motion';
 import {
-  useCursor,
   useLyricsPlus,
   useQRCode,
   useQrColor,
@@ -21,7 +20,6 @@ import {
 import UserCard from '../UserCard/UserCard';
 import { Track } from '../../types/types';
 import { getContrastColor, setColorOpacity } from '../../utils/functions';
-import { rgba } from '@react-spring/shared';
 
 interface update {
   data: {
@@ -50,7 +48,7 @@ interface WebkitDocument extends Document {
 
 // Use the WebkitDocument interface as the type for the document object
 export const doc: WebkitDocument = document as unknown as WebkitDocument;
-Dayjs.extend(relativeTime);
+Dayjs.extend(relativeTime); // use relative time
 
 interface TFullScreenProps {
   response: any;
@@ -58,7 +56,6 @@ interface TFullScreenProps {
 const FullScreen = ({ response }: TFullScreenProps) => {
   const [currentSong, setCurrentSong] = useState<any>(null);
   const [sessionUrl, setSessionUrl] = useState<any>('');
-  const { cursorXSpring, cursorYSpring } = useCursor();
   const [audioData, setAudioData] = useState<any>(null);
   const [lyricsRef, setLyricsRef] = useState<any>(null);
   const pausedMultiplier = useMotionValue(Spicetify.Player.isPlaying() ? 0 : 1);
@@ -355,13 +352,7 @@ const FullScreen = ({ response }: TFullScreenProps) => {
           <div>{currentSong?.metadata.album_artist_name}</div>
         </motion.div>
       </div>
-      <motion.div
-        className={styles.cursor}
-        style={{
-          translateX: cursorXSpring,
-          translateY: cursorYSpring,
-        }}
-      />
+
       <div
         id="fad-lyrics-plus-container"
         style={{
