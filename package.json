@@ -11,10 +11,12 @@
   "devDependencies": {
     "@types/react": "^18.0.25",
     "@types/react-dom": "^18.0.8",
-    "spicetify-creator": "^1.0.11"
+    "spicetify-creator": "^1.0.11",
+    "tailwindcss": "^3.2.7"
   },
   "dependencies": {
     "@nuintun/qrcode": "^3.3.0",
+    "@skinnypete/color": "^1.0.3",
     "art-qr": "^0.1.2",
     "color.js": "^1.2.0",
     "colortranslator": "^1.9.3",
@@ -23,6 +25,9 @@
     "easyqrcodejs": "^4.4.13",
     "fast-average-color": "^9.1.1",
     "framer-motion": "^7.6.6",
-    "socket.io-client": "^4.5.3"
+    "lucide-react": "^0.176.0",
+    "socket.io-client": "^4.5.3",
+    "three": "^0.151.3",
+    "zustand": "^4.3.7"
   }
 }

@@ -5,6 +5,7 @@ import { doc } from '../components/FullScreen/FullScreen';
 import { generateQRCode } from './api';
 import { FastAverageColor } from 'fast-average-color';
 import Queue from '../components/Blocks/Queue.tsx/Queue';
+import { Track } from '../types/types';
 
 const fac = new FastAverageColor();
 
@@ -37,6 +38,14 @@ type User = {
   joined_timestamp: number;
 };
 
+type suckyQueue = typeof Spicetify.Queue;
+
+type supaQueue = {
+  next: Track[];
+  prev: Track[];
+  current: Track;
+};
+
 export const useQueue = (): {
   queue: {
     next: any[];
@@ -45,7 +54,7 @@ export const useQueue = (): {
   };
 } => {
   // console.log(Queue);
-  const [queue, setQueue] = useState<any>({
+  const [queue, setQueue] = useState<supaQueue>({
     next: [...Spicetify.Queue.nextTracks],
     prev: [...Spicetify.Queue.prevTracks],
     current: { ...Spicetify.Queue?.track },
@@ -54,7 +63,7 @@ export const useQueue = (): {
     Spicetify.Platform.PlayerAPI._events.addListener(
       'queue_update',
       (data: any) => {
-        const queue = JSON.parse(JSON.stringify(Spicetify.Queue));
+        const queue: suckyQueue = JSON.parse(JSON.stringify(Spicetify.Queue));
         setQueue((state) => ({
           current: { ...queue.track },
           next: [...queue.nextTracks],
@@ -147,7 +156,7 @@ export const useQrColor = (
           throw 'Error parsing QR code';
         });
     }, 200);
-  }, [fac, imgRef, queue]);
+  }, [fac, imgRef.current?.src, imgRef.current?.complete, queue]);
 
   return [qrColor, hexColor];
 };

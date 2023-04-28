@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Track } from '../../../types/types';
 import {
   motion,
+  useAnimation,
+  useAnimationControls,
   useAnimationFrame,
   useMotionValue,
   useSpring,
@@ -25,6 +27,9 @@ const Player = () => {
   const { queue } = useQueue();
   const lyricsRef = useRef<HTMLDivElement>(null);
   const { current, next, prev } = queue;
+  const transitionAnimation = usePlayerStore(
+    (state) => state.transitionAnimation
+  );
   const setQrColor = usePlayerStore((state) => state.setQrColor);
   const audioData = usePlayerStore((state) => state.audioData);
   const setAudioData = usePlayerStore((state) => state.setAudioData);
@@ -33,9 +38,15 @@ const Player = () => {
   const imgRef = useRef<HTMLImageElement>(null);
   const imgContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const nextTrackControls = useAnimationControls();
+  const previousTrackControls = useAnimationControls();
+  const currentTrackControls = useAnimationControls();
 
   const isNextOpacity = useMotionValue(0.6);
   const isPreviousOpacity = useMotionValue(0.4);
+  const hueRotateSource = useMotionValue(0);
+  const hueRotateValue = useTransform(hueRotateSource, [0, 1], [0, 30]);
+  const blurAmount = useTransform(hueRotateSource, [0, 1], [0, 30]);
 
   const [qrColor, hexQrColor] = useQrColor({ imgRef }, queue);
   useLyricsPlus();
@@ -131,18 +142,106 @@ const Player = () => {
                     scale: 1.05,
                   }}
                   onDrag={(e, info) => {
-                    if (info.offset.x) {
-                      isPreviousOpacity.set(0.4);
-                      isNextOpacity.set(0.6);
-                      if (info.offset.x > 200) {
-                        isPreviousOpacity.set(1);
+                    if (currentTrackControls) {
+                      hueRotateSource.set(Math.abs(info.offset.x) / 100);
+                      transitionAnimation?.set({
+                        opacity: 1 - hueRotateSource.get(),
+                      });
+                      currentTrackControls.set({
+                        opacity: Math.abs(+(50 / info.offset.x).toFixed(3)),
+                        scale: hueRotateSource.get() * 0.2 + 1,
+                        filter: `hue-rotate(0) blur(${Math.round(
+                          hueRotateSource.get() * 5
+                        )}px)`,
+                        // x: info.offset.x,
+                      });
+                      console.log(Math.round(hueRotateSource.get() * 100));
+                      360 - hueRotateValue.get();
+                      if (Math.abs(info.offset.x) > 100) {
+                        currentTrackControls.set({
+                          filter: `hue-rotate(${
+                            360 - hueRotateValue.get()
+                          }deg) blur(${Math.round(
+                            hueRotateSource.get() * 5
+                          )}px)`,
+                        });
                       }
-                      if (info.offset.x < -200) {
-                        isNextOpacity.set(1);
+                    }
+                    if (info.offset.x) {
+                      if (info.offset.x > 200) {
+                        previousTrackControls.start(
+                          { opacity: 1 },
+                          {
+                            type: 'spring',
+                            duration: 0.15,
+                          }
+                        );
+                      } else if (info.offset.x < -200) {
+                        nextTrackControls.start(
+                          { opacity: 1 },
+                          {
+                            type: 'spring',
+                            duration: 0.15,
+                          }
+                        );
+                      } else {
+                        if (previousTrackControls) {
+                          previousTrackControls.set({
+                            opacity: 0.6,
+                            x: info.offset.x - 440,
+                          });
+                        }
+                        if (nextTrackControls) {
+                          nextTrackControls.set({
+                            opacity: 0.6,
+                            x: 440 - Math.abs(Math.min(info.offset.x, 0)) * 1.5,
+                          });
+                        }
                       }
                     }
                   }}
                   onDragEnd={(e, info) => {
+                    if (previousTrackControls) {
+                      transitionAnimation?.set({
+                        opacity: 1,
+                      });
+                      previousTrackControls.start(
+                        {
+                          opacity: 0,
+                          x: -440,
+                        },
+                        {
+                          type: 'tween',
+                          duration: 0,
+                        }
+                      );
+                    }
+                    if (nextTrackControls) {
+                      nextTrackControls.start(
+                        {
+                          opacity: 0,
+                          x: 440,
+                        },
+                        {
+                          type: 'tween',
+                          duration: 0,
+                        }
+                      );
+                    }
+                    if (currentTrackControls) {
+                      currentTrackControls.start(
+                        {
+                          opacity: 1,
+                          x: 0,
+                          scale: 1,
+                          filter: 'hue-rotate(0) blur(0px)',
+                        },
+                        {
+                          type: 'spring',
+                          duration: 0.3,
+                        }
+                      );
+                    }
                     if (info.offset.x > 0) {
                       if (info.offset.x > 200) {
                         Spicetify.Player.back();
@@ -152,6 +251,7 @@ const Player = () => {
                         Spicetify.Player.next();
                       }
                     }
+                    hueRotateSource.set(0);
                     setIsDragging(false);
                     setTimeout(() => {
                       isNextOpacity.set(0);
@@ -171,14 +271,13 @@ const Player = () => {
                                 style={{
                                   width: '400px',
                                   height: '400px',
+                                  zIndex: 20,
                                   position: 'absolute',
-                                  left: -440,
+                                  x: -440,
                                   boxShadow: `1px 2px 8px rgb(0,0,0,0.3)`,
                                   transformOrigin: 'bottom left',
                                 }}
-                                animate={{
-                                  opacity: isPreviousOpacity.get(),
-                                }}
+                                animate={previousTrackControls}
                                 initial={{
                                   opacity: 0,
                                 }}
@@ -203,14 +302,14 @@ const Player = () => {
                                 style={{
                                   width: '400px',
                                   height: '400px',
+                                  zIndex: 20,
                                   position: 'absolute',
-                                  right: -440,
+                                  x: 440,
+                                  originX: 0,
                                   boxShadow: `1px 2px 8px rgb(0,0,0,0.3)`,
                                   transformOrigin: 'bottom left',
                                 }}
-                                animate={{
-                                  opacity: isNextOpacity.get(),
-                                }}
+                                animate={nextTrackControls}
                                 initial={{
                                   opacity: 0,
                                 }}
@@ -231,57 +330,60 @@ const Player = () => {
                         </>
                       }
                       {current?.contextTrack?.metadata?.image_xlarge_url && (
-                        <motion.img
-                          ref={imgRef}
-                          style={{
-                            originX: 0,
-                            originY: 1,
-                            width: '400px',
-                            boxShadow: `1px 2px 8px rgb(0,0,0,0.3)`,
-                            transformOrigin: 'center center',
-                          }}
-                          draggable={false}
-                          animate={{
-                            transform: !isDragging
-                              ? [
-                                  'perspective(800px) translateY(0px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1)',
-                                  'perspective(800px) translateY(1px) rotateX(1deg) rotateY(1deg) rotateZ(1deg) scale(1.01)',
-                                  'perspective(800px) translateY(0px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1.01)',
-                                  'perspective(800px) translateY(1px) rotateX(-1deg) rotateY(-1deg) rotateZ(-1deg) scale(1)',
-                                ]
-                              : [
-                                  'perspective(800px) translateY(0px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1.01)',
-                                ],
+                        <motion.div animate={currentTrackControls}>
+                          <motion.img
+                            ref={imgRef}
+                            style={{
+                              originX: 0,
+                              zIndex: 10,
+                              originY: 1,
+                              width: '400px',
+                              boxShadow: `1px 2px 8px rgb(0,0,0,0.3)`,
+                              transformOrigin: 'center center',
+                            }}
+                            draggable={false}
+                            animate={{
+                              transform: !isDragging
+                                ? [
+                                    'perspective(800px) translateY(0px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1)',
+                                    'perspective(800px) translateY(1px) rotateX(1deg) rotateY(1deg) rotateZ(1deg) scale(1.01)',
+                                    'perspective(800px) translateY(0px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1.01)',
+                                    'perspective(800px) translateY(1px) rotateX(-1deg) rotateY(-1deg) rotateZ(-1deg) scale(1)',
+                                  ]
+                                : [
+                                    'perspective(800px) translateY(0px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1.01)',
+                                  ],
 
-                            filter: [
-                              `drop-shadow(rgba(0, 0, 0, 0.25) -5px -10px ${
-                                isDragging ? 4 : 4
-                              }px)`,
-                              `drop-shadow(rgba(0, 0, 0, 0.25) -5px -5px ${
-                                isDragging ? 5 : 2
-                              }px)`,
-                              `drop-shadow(rgba(0, 0, 0, 0.25) -5px -10px ${
-                                isDragging ? 5 : 4
-                              }px)`,
-                              `drop-shadow(rgba(0, 0, 0, 0.25) -5px -5px ${
-                                isDragging ? 5 : 4
-                              }px)`,
-                            ],
-                          }}
-                          transition={{
-                            type: 'spring',
-                            duration: +(audioData.tempo / 125).toFixed(2),
-                            bounce: 0.3,
-                            damping: 12,
-                            repeatType: 'mirror',
-                            stiffness: 50,
-                            repeat: Infinity,
-                          }}
-                          className="overflow-hidden border border-gray-500 rounded-sm border-opacity-30 "
-                          src={
-                            current?.contextTrack?.metadata?.image_xlarge_url
-                          }
-                        />
+                              filter: [
+                                `drop-shadow(rgba(0, 0, 0, 0.25) -5px -10px ${
+                                  isDragging ? 4 : 4
+                                }px)`,
+                                `drop-shadow(rgba(0, 0, 0, 0.25) -5px -5px ${
+                                  isDragging ? 5 : 2
+                                }px)`,
+                                `drop-shadow(rgba(0, 0, 0, 0.25) -5px -10px ${
+                                  isDragging ? 5 : 4
+                                }px)`,
+                                `drop-shadow(rgba(0, 0, 0, 0.25) -5px -5px ${
+                                  isDragging ? 5 : 4
+                                }px)`,
+                              ],
+                            }}
+                            transition={{
+                              type: 'spring',
+                              duration: +(audioData.tempo / 125).toFixed(2),
+                              bounce: 0.3,
+                              damping: 12,
+                              repeatType: 'mirror',
+                              stiffness: 50,
+                              repeat: Infinity,
+                            }}
+                            className="overflow-hidden border border-gray-500 rounded-sm border-opacity-30 "
+                            src={
+                              current?.contextTrack?.metadata?.image_xlarge_url
+                            }
+                          />
+                        </motion.div>
                       )}
                     </>
                   }
@@ -295,6 +397,7 @@ const Player = () => {
               }}
               animate={{
                 opacity: qrColor ? 1 : 0,
+                filter: `drop-shadow(rgba(0, 0, 0, 0.25) -1px -10px 6px) blur(${blurAmount.get()}px)`,
                 color:
                   getContrastColor(qrColor) === 'white'
                     ? 'rgb(255,255,255)'

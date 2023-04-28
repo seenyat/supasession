@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useQueue } from '../../utils/hooks';
 import Player from '../Blocks/Player/Player';
-import { motion } from 'framer-motion';
+import { motion, useAnimationControls } from 'framer-motion';
 import Queue from '../Blocks/Queue.tsx/Queue';
 import Session from '../Blocks/Session/Session';
 import { usePlayerStore } from '../../app';
@@ -20,44 +20,88 @@ import { usePlayerStore } from '../../app';
 const SupaSession = ({ fullScreen }: { fullScreen?: boolean }) => {
   const { queue } = useQueue();
   const audioData = usePlayerStore((state) => state.audioData);
-  const qrColor = usePlayerStore((state) => state.qrColor);
+  const transitionNextAnimation = useAnimationControls();
+  const transitionPrevAnimation = useAnimationControls();
+  const transitionCurrentAnimation = useAnimationControls();
+  const setTransitionAnimation = usePlayerStore(
+    (state) => state.setTransitionAnimation
+  );
+  useEffect(() => setTransitionAnimation(transitionCurrentAnimation), []);
+  useEffect(() => {
+    transitionCurrentAnimation.start(
+      {
+        scale: [2.1, 2.2],
+        rotate: [0, 180],
+      },
+      {
+        type: 'tween',
+        duration: Math.max(50, +audioData.duration / 3),
+        repeatType: 'mirror',
+        repeat: Infinity,
+      }
+    );
+    transitionNextAnimation.start(
+      {
+        scale: [2.1, 2.2],
+        rotate: [0, 180],
+      },
+      {
+        type: 'tween',
+        duration: Math.max(50, +audioData.duration / 3),
+        repeatType: 'mirror',
+        repeat: Infinity,
+      }
+    );
+  }, [audioData.duration]);
+
   // const { value, setValue } = useSpringyValue(qrColor);
 
   return (
     <div className="w-full h-full p-4 overflow-hidden aspect-video">
       <div className="absolute inset-0 -z-10">
-        <div
+        <motion.div
           style={{
-            backgroundColor: `${qrColor} / 0.1`,
             backdropFilter: 'blur(100px) brightness(0.83) hue-rotate(330deg)',
           }}
           className="absolute inset-0 -z-20"
-        ></div>
+        ></motion.div>
         <div className="relative w-full h-full overflow-hidden">
           {audioData.duration && (
-            <motion.img
-              className="absolute w-full h-full -z-30"
-              style={{
-                rotate: '130deg',
-              }}
-              exit={{
-                opacity: 0,
-              }}
-              animate={{
-                transform: [
-                  'scale(2.1) rotate(0deg)',
-                  'scale(2.2) rotate(180deg)',
-                ],
-                opacity: [0.9, 1],
-              }}
-              transition={{
-                type: 'tween',
-                duration: Math.max(50, +audioData.duration / 3),
-                repeatType: 'mirror',
-                repeat: Infinity,
-              }}
-              src={queue.current?.contextTrack?.metadata.image_xlarge_url}
-            />
+            <>
+              <motion.div>
+                <motion.img
+                  className="absolute w-full h-full -z-30"
+                  style={{
+                    rotate: '130deg',
+                  }}
+                  exit={{
+                    opacity: 0,
+                  }}
+                  animate={transitionCurrentAnimation}
+                  transition={{
+                    type: 'tween',
+                    duration: Math.max(50, +audioData.duration / 3),
+                    repeatType: 'mirror',
+                    repeat: Infinity,
+                  }}
+                  src={queue.current?.contextTrack?.metadata.image_xlarge_url}
+                />
+              </motion.div>
+
+              {queue.next[0].contextTrack.metadata.image_xlarge_url && (
+                <motion.img
+                  className="absolute w-full h-full -z-40"
+                  style={{
+                    rotate: '130deg',
+                  }}
+                  exit={{
+                    opacity: 0,
+                  }}
+                  animate={transitionNextAnimation}
+                  src={queue.next[0]?.contextTrack?.metadata.image_xlarge_url}
+                />
+              )}
+            </>
           )}
         </div>
       </div>

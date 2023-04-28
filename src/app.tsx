@@ -2,7 +2,7 @@ import styles from './css/app.module.scss';
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { doc } from './components/FullScreen/FullScreen';
-import { motion } from 'framer-motion';
+import { AnimationControls, motion } from 'framer-motion';
 import { useQrColor, useQueue } from './utils/hooks';
 import FullScreenView from './pages/FullScreenView/FullScreenView';
 import SupaSession from './components/SupaSession/SupaSession';
@@ -26,6 +26,8 @@ export interface PlayerStore {
     duration: number;
   }) => void;
   qrColor: string;
+  transitionAnimation?: AnimationControls;
+  setTransitionAnimation: (transitionAnimation: AnimationControls) => void;
   setQrColor: (qrColor: string) => void;
   joinSessionToken: string;
   setJoinSessionToken: (joinSessionToken: string) => void;
@@ -44,6 +46,9 @@ export const usePlayerStore = create<PlayerStore>((set) => ({
     tempo: 0,
     duration: 10000,
   },
+  transitionAnimation: undefined,
+  setTransitionAnimation: (transitionAnimation: AnimationControls) =>
+    set({ transitionAnimation }),
   joinSessionToken: '',
   setJoinSessionToken: (joinSessionToken: string) => set({ joinSessionToken }),
   setAudioData: (audioData) => set({ audioData }),
