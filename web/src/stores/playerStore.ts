@@ -41,6 +41,7 @@ export const usePlayerStore = create<PlayerStore>((set) => ({
     current: null,
     next: [],
     prev: [],
+    version: 0,
   },
 
   lyrics: null,

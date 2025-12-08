@@ -12,6 +12,7 @@ export type MessageKind =
 
 export interface Track {
   id: string;
+  uid: string; // unique ID in queue context (needed for skipTo)
   name: string;
   artists: string[];
   album: string;
@@ -42,6 +43,7 @@ export interface QueueState {
   current: Track | null;
   next: Track[];
   prev: Track[];
+  version?: number;
 }
 
 export interface LyricLine {
@@ -61,6 +63,7 @@ export type ControlCommand =
   | { command: "togglePlayPause" }
   | { command: "next" }
   | { command: "previous" }
+  | { command: "playTrack"; trackId: string }
   | { command: "seek"; positionMs: number }
   | { command: "setVolume"; volume: number };
 

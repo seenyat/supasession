@@ -8,8 +8,11 @@ import { ConnectionStatus } from "./components/ConnectionStatus";
 import { SessionConnect } from "./components/SessionConnect";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { usePlayerStore } from "./stores/playerStore";
+import { ShaderOverlay } from "./components/ShaderOverlay";
+import { PlayerServiceProvider, usePlayerService, useSetSendControl } from "./state/PlayerServiceProvider";
+import { DebugPanel } from "./components/DebugPanel";
 
-function App() {
+function AppShell() {
   const [inputSessionId, setInputSessionId] = useState<string | null>(null);
   const [autoJoin, setAutoJoin] = useState(false);
   const [showFallbackDialog, setShowFallbackDialog] = useState(false);
@@ -45,7 +48,19 @@ function App() {
     }
   }, [autoJoin, storeSessionId, connectionStatus]);
 
-  const { sendControl } = useWebSocket({ sessionId: inputSessionId, autoJoin });
+  const service = usePlayerService();
+  const setSendControl = useSetSendControl();
+
+  const { sendControl } = useWebSocket({
+    sessionId: inputSessionId,
+    autoJoin,
+    onQueue: (snapshot) => service.send({ type: "SERVER_QUEUE", snapshot }),
+    onPlayer: (state) => service.send({ type: "SERVER_PLAYER", state }),
+  });
+
+  useEffect(() => {
+    setSendControl(sendControl);
+  }, [sendControl, setSendControl]);
 
   const handleConnect = (sessionId: string) => {
     setInputSessionId(sessionId);
@@ -54,17 +69,28 @@ function App() {
     window.history.replaceState({}, "", `?session=${sessionId}`);
   };
 
-  const handleSkipNext = () => sendControl({ command: "next" });
-  const handleSkipPrev = () => sendControl({ command: "previous" });
+  const handleSkipNext = () => service.send({ type: "USER_NEXT" });
+  const handleSkipPrev = () =>
+    service.send({
+      type: "USER_PREV",
+      allowRewind: false,
+      positionMs: usePlayerStore.getState().playerState.positionMs,
+    });
   const handleSeek = (positionMs: number) => sendControl({ command: "seek", positionMs });
   const handleTogglePlay = () => sendControl({ command: "togglePlayPause" });
 
-  // Spacebar to toggle play/pause
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === "Space") {
         e.preventDefault();
         sendControl({ command: "togglePlayPause" });
+      }
+      // Press 'D' to trigger debug output in Spotify console
+      if (e.code === "KeyD" && e.shiftKey) {
+        e.preventDefault();
+        sendControl({ command: "debug" });
+        console.log("Debug command sent - check Spotify DevTools console");
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -81,6 +107,9 @@ function App() {
     <>
       <BlurredBackground />
       
+      {/* Shader overlay (cosine + fbm) above blur, below UI */}
+      <ShaderOverlay className="fixed inset-0 z-[2] mix-blend-screen opacity-90 pointer-events-none" />
+
       {/* Color overlay that blends with canvas */}
       <motion.div
         className="fixed inset-0 z-[1] pointer-events-none"
@@ -104,15 +133,23 @@ function App() {
         {/* Main grid: Session | Player | Lyrics */}
         <div className="grid pt-24 xl:pt-0 pb-64 xl:pb-8 justify-items-center xl:justify-items-start h-full w-full grid-cols-1 xl:grid-cols-[2fr_5fr_3fr] gap-2">
           <Session />
-          <Player onSkipNext={handleSkipNext} onSkipPrev={handleSkipPrev} onSeek={handleSeek} />
+          <Player onSkipNext={handleSkipNext} onSkipPrev={handleSkipPrev} onSeek={handleSeek} onTogglePlay={handleTogglePlay} />
           {/* Lyrics column */}
           <div className="hidden xl:flex items-center relative h-full w-full overflow-hidden">
             <Lyrics onSeek={handleSeek} />
           </div>
         </div>
       </div>
+
+      <DebugPanel />
     </>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <PlayerServiceProvider>
+      <AppShell />
+    </PlayerServiceProvider>
+  );
+}

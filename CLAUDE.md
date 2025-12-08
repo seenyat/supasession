@@ -16,7 +16,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 │  Spicetify       │     │  Relay Server    │     │  Web App         │
 │  Extension       │────▶│  (Node + WS)     │◀────│  (React + Motion)│
 │  (Producer)      │     │  ws://17777      │     │  (Consumer)      │
-└──────────────────┘     └──────────────────┘     └──────────────────┘
+└──────────────────┘     │  http://17778    │     └──────────────────┘
+                         └──────────────────┘
 ```
 
 ## Monorepo Structure
@@ -24,7 +25,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Package | Path | Description |
 |---------|------|-------------|
 | `@supasession/shared` | `shared/` | Shared TypeScript types and Effect/Schema message definitions |
-| `@supasession/relay` | `relay/` | WebSocket relay server (Node + ws) |
+| `@supasession/relay` | `relay/` | WebSocket relay server (Node + ws) + HTTP API |
 | `@supasession/web` | `web/` | React web app with Motion animations |
 | `@supasession/extension` | `extension/` | Spicetify extension messenger |
 
@@ -35,7 +36,7 @@ Legacy code in `src/` is the old Spicetify custom app (deprecated).
 ```bash
 # Development
 pnpm dev              # Start relay + web in parallel
-pnpm dev:relay        # Start relay server only (ws://localhost:17777)
+pnpm dev:relay        # Start relay server only (ws://localhost:17777, http://localhost:17778)
 pnpm dev:web          # Start web app only (http://localhost:3000)
 
 # Build
@@ -61,12 +62,13 @@ pkill -x Spotify; sleep 1; open -a Spotify
 - Connects to relay as WebSocket producer
 - Sends `player_state` and `queue_update` messages
 - Fetches album art as base64 (no CORS in Electron) and sends with messages
-- **Fetches images for first 2 next/prev tracks** for drag preview functionality
+- **Fetches images for LAST 2 prev tracks** (most recent) for drag preview functionality
 - Displays green badge with session ID (click to copy)
 - Handles control commands from consumers (play/pause/next/prev/seek)
 
 ### Relay Server (`relay/src/index.ts`)
-- WebSocket server on port 17777
+- **WebSocket server** on port 17777
+- **HTTP API server** on port 17778 (for debugging and control)
 - Routes messages from producer to consumers
 - **Caches last `player_state` and `queue_update`** per session
 - **Sends cached state to new consumers** immediately after welcome (fixes refresh losing data)
@@ -78,15 +80,33 @@ pkill -x Spotify; sleep 1; open -a Spotify
 ### Web App (`web/src/`)
 - **App.tsx** - Main layout, auto-join logic, session connection
 - **Player.tsx** - Album art with drag-to-skip, tempo-synced bounce animation, prev/next previews
-- **BlurredBackground.tsx** - Canvas-based blurred album art background with slow rotation, uses flex centering to avoid transform conflicts with rotation animation
-- **Session.tsx** - QR code display for session sharing
+- **BlurredBackground.tsx** - Canvas-based blurred album art background with slow rotation
+- **Session.tsx** - Queue preview display (shows 2 prev + 6 next tracks)
 - **hooks/useWebSocket.ts** - Effect-based WebSocket client with reconnection
 - **hooks/useDominantColor.ts** - Extracts dominant color from album art (uses base64 data)
 - **stores/playerStore.ts** - Zustand store for player state, queue, dominant color
+- **state/playerMachine.ts** - XState machine for player control commands
 
 ### Shared (`shared/src/`)
 - **types.ts** - TypeScript interfaces (Track, PlayerState, QueueState, etc.)
 - **schemas.ts** - Effect/Schema definitions for message validation
+
+## HTTP API (Relay)
+
+The relay exposes an HTTP API on port 17778 for debugging and control:
+
+```bash
+# List active sessions
+curl http://localhost:17778/api/sessions
+
+# Send debug command (returns Spicetify API inspection)
+curl http://localhost:17778/api/debug
+
+# Send any control command
+curl -X POST http://localhost:17778/api/control \
+  -H "Content-Type: application/json" \
+  -d '{"command": "next"}'
+```
 
 ## Message Protocol
 
@@ -108,9 +128,51 @@ Message kinds:
 - `player_state` - Current playback state including base64 album art
 - `queue_update` - Queue changed
 - `heartbeat` - Keep-alive
-- `control` - Playback commands (play/pause/next/prev/seek)
+- `control` - Playback commands (play/pause/next/prev/seek/skipPrevious/debug)
 - `sessions` - List of available sessions (for auto-join)
 - `error` - Error messages
+- `debug_response` - Spicetify API inspection data
+
+## Control Commands
+
+Available control commands sent from consumer to producer:
+
+| Command | Description |
+|---------|-------------|
+| `play` | Resume playback |
+| `pause` | Pause playback |
+| `togglePlayPause` | Toggle play/pause |
+| `next` | Skip to next track |
+| `previous` | Skip to previous (rewinds if >3s into track) |
+| `skipPrevious` | **Always** skip to previous track (never rewinds) |
+| `seek` | Seek to position (`positionMs` param) |
+| `setVolume` | Set volume (`volume` param, 0-100) |
+| `debug` | Trigger Spicetify API inspection |
+
+## Spicetify API Notes
+
+### Undocumented but useful methods:
+
+```typescript
+// Skip to previous track WITHOUT rewind behavior
+Spicetify.Platform.PlayerAPI.skipToPrevious()
+
+// Skip to next track
+Spicetify.Platform.PlayerAPI.skipToNext()
+
+// Get current context (playlist/album)
+Spicetify.Player.data.context
+
+// PlayerAPI has many useful methods on its prototype:
+// getState, play, pause, resume, skipToNext, skipToPrevious, skipTo,
+// seekTo, seekBy, setShuffle, setRepeat, addToQueue, removeFromQueue,
+// clearQueue, reorderQueue, insertIntoQueue, getQueue, playAsNextInQueue
+```
+
+### Queue ordering:
+- `Spicetify.Queue.prevTracks` is **chronological** (oldest first)
+- To get the immediate previous track: `prevTracks[prevTracks.length - 1]`
+- `Spicetify.Queue.nextTracks[0]` is the immediate next track
 
 ## Key Features
 
@@ -122,21 +184,20 @@ The extension fetches album art and converts to base64 inside Spotify's Electron
 
 ### Drag-to-Skip
 Dragging the album art left/right:
+- **Drag LEFT** → Shows next track preview → Triggers `next` command
+- **Drag RIGHT** → Shows prev track preview → Triggers `skipPrevious` command
 - Shows prev/next track album art sliding in from sides (z-index above current)
-- Shows prev/next track labels sliding in below album art (replacing current label)
+- Shows prev/next track labels sliding in below album art
 - Current album art applies hue-rotate and blur effects during drag
-- Current label slides down and fades out rapidly to avoid overlap
 - Triggers skip when drag exceeds threshold (120px)
-- Sends control command to extension
-- Uses single `dragX` motion value as source of truth with `useTransform` for all derived animations
+- Uses single `dragX` motion value as source of truth with `useTransform`
 - Spring physics for snappy feel (stiffness: 650, damping: 40)
-- Commit state with scale pop and white overlay flash when threshold crossed
 
 ### Tempo-Synced Animations
 Album art bounces to the beat:
 - 3D rotation (rotateX, rotateY, rotateZ)
 - Scale pulsing
-- Dynamic box-shadow
+- Dynamic box-shadow with glow
 - Duration calculated from track tempo
 
 ### Auto-Join
@@ -151,6 +212,7 @@ Web app can auto-connect to the only active session:
 - **React 18** - UI framework
 - **Motion (framer-motion v11)** - Animations
 - **Zustand** - State management
+- **XState** - State machine for player control
 - **Effect + @effect/schema** - Message validation
 - **TailwindCSS** - Styling
 - **Vite** - Web app bundler
@@ -166,13 +228,12 @@ Web app can auto-connect to the only active session:
 
 ## Visual Layers (z-index)
 
-The app uses a layered approach for the background and content:
-
 ```
 z-0   : BlurredBackground (canvas with rotating blurred album art)
-z-[1] : Color overlay (dominant color at 50% opacity, blends with canvas)
+z-[1] : Color overlay (dominant color at 50% opacity)
 z-10  : Main content container
 z-20  : Prev/next album art previews (appear above current during drag)
+z-30  : Current draggable album art
 ```
 
 ## Animation Architecture (Player.tsx)
@@ -191,4 +252,35 @@ All derived animations use `useTransform`:
 - Label positions and fade
 - Commit overlay flash
 
-This avoids imperative `animationControls` and ensures all animations stay in sync.
+## State Machine (playerMachine.ts)
+
+XState machine handles player control with proper acknowledgment:
+
+States: `ready` → `waitingAck` → `ready`
+
+Events:
+- `SERVER_QUEUE` / `SERVER_PLAYER` - Updates from extension
+- `USER_NEXT` / `USER_PREV` - User initiated skip
+- `USER_REWIND` - Seek to beginning
+- `CTRL_ACK` / `CTRL_TIMEOUT` - Command acknowledgment
+
+The machine sends control commands via `getSendControl()` callback and tracks pending commands.
+
+## Troubleshooting
+
+### Extension not responding
+1. Rebuild: `pnpm build:extension`
+2. Copy: `cp extension/dist/supasession-messenger.js ~/.config/spicetify/Extensions/`
+3. Apply: `spicetify apply`
+4. Restart Spotify
+
+### Debug Spicetify APIs
+```bash
+curl http://localhost:17778/api/debug
+```
+Returns available PlayerAPI methods, queue state, and context info.
+
+### Previous track shows wrong song
+- `prev` array is chronological (oldest first)
+- Use `prev[prev.length - 1]` for immediate previous
+- Use `prev.slice(-2)` for last 2 tracks in Session.tsx

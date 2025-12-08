@@ -11,12 +11,14 @@
   "dependencies": {
     "@effect/schema": "^0.75.0",
     "@supasession/shared": "workspace:*",
+    "@xstate/react": "^3.1.0",
     "effect": "^3.10.0",
     "fast-average-color": "^9.4.0",
     "lucide-react": "^0.460.0",
     "motion": "^11.12.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
+    "xstate": "^4.38.3",
     "zustand": "^5.0.0"
   },
   "devDependencies": {

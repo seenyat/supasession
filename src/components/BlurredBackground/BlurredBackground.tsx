@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useQueue } from '../../utils/hooks';
+import ShaderOverlay from './ShaderOverlay';
 
 interface BlurredBackgroundProps {
   className?: string;
@@ -65,7 +66,8 @@ const BlurredBackground: React.FC<BlurredBackgroundProps> = ({ className }) => {
           repeat: Infinity,
         }}
       />
-      <div className="absolute inset-0 bg-black/30" />
+      <ShaderOverlay className="absolute inset-0 mix-blend-screen opacity-90" />
+      <div className="absolute inset-0 bg-black/40" />
     </motion.div>
   );
 };

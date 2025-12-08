@@ -16,10 +16,12 @@ const RECONNECT_DELAYS = [100, 500, 1000, 2000, 5000, 10000];
 interface UseWebSocketOptions {
   sessionId?: string | null;
   autoJoin?: boolean;
+  onQueue?: (snapshot: any) => void;
+  onPlayer?: (state: any) => void;
 }
 
 export const useWebSocket = (options: UseWebSocketOptions = {}) => {
-  const { sessionId = null, autoJoin = false } = options;
+  const { sessionId = null, autoJoin = false, onQueue, onPlayer } = options;
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimeoutRef = useRef<number | null>(null);
@@ -56,6 +58,7 @@ export const useWebSocket = (options: UseWebSocketOptions = {}) => {
         );
         if (playerResult._tag === "Right") {
           const payload = playerResult.right.payload;
+          onPlayer?.(payload);
           setPlayerState({
             ...payload,
             currentTrack: payload.currentTrack
@@ -75,6 +78,7 @@ export const useWebSocket = (options: UseWebSocketOptions = {}) => {
         );
         if (queueResult._tag === "Right") {
           const payload = queueResult.right.payload;
+          onQueue?.(payload);
           setQueue({
             current: payload.current
               ? { 

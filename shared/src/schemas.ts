@@ -2,6 +2,7 @@ import * as S from "@effect/schema/Schema";
 
 export const TrackSchema = S.Struct({
   id: S.String,
+  uid: S.String,
   name: S.String,
   artists: S.Array(S.String),
   album: S.String,
@@ -32,6 +33,7 @@ export const QueueStateSchema = S.Struct({
   current: S.NullOr(TrackSchema),
   next: S.Array(TrackSchema),
   prev: S.Array(TrackSchema),
+  version: S.optional(S.Number),
 });
 
 export const LyricLineSchema = S.Struct({
@@ -51,8 +53,12 @@ export const ControlCommandSchema = S.Union(
   S.Struct({ command: S.Literal("togglePlayPause") }),
   S.Struct({ command: S.Literal("next") }),
   S.Struct({ command: S.Literal("previous") }),
+  S.Struct({ command: S.Literal("skipPrevious") }),
+  S.Struct({ command: S.Literal("skipTo"), trackUri: S.String, trackUid: S.String }),
+  S.Struct({ command: S.Literal("playTrack"), trackId: S.String }),
   S.Struct({ command: S.Literal("seek"), positionMs: S.Number }),
-  S.Struct({ command: S.Literal("setVolume"), volume: S.Number })
+  S.Struct({ command: S.Literal("setVolume"), volume: S.Number }),
+  S.Struct({ command: S.Literal("debug") })
 );
 
 export const HelloPayloadSchema = S.Struct({
@@ -139,6 +145,14 @@ export const ErrorMessageSchema = S.extend(
   })
 );
 
+export const DebugResponseMessageSchema = S.extend(
+  BaseMessageSchema,
+  S.Struct({
+    kind: S.Literal("debug_response"),
+    payload: S.Record({ key: S.String, value: S.Unknown }),
+  })
+);
+
 export const AnyMessageSchema = S.Union(
   HelloMessageSchema,
   WelcomeMessageSchema,
@@ -147,7 +161,8 @@ export const AnyMessageSchema = S.Union(
   LyricsMessageSchema,
   HeartbeatMessageSchema,
   ControlMessageSchema,
-  ErrorMessageSchema
+  ErrorMessageSchema,
+  DebugResponseMessageSchema
 );
 
 export type AnyMessage = S.Schema.Type<typeof AnyMessageSchema>;

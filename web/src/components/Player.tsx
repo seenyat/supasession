@@ -1,31 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   motion,
+  AnimatePresence,
   useMotionValue,
   useSpring,
   useTransform,
-  useMotionValueEvent,
   animate,
 } from "motion/react";
 import { usePlayerStore } from "../stores/playerStore";
 import { useDominantColor } from "../hooks/useDominantColor";
-import type { Track } from "@supasession/shared";
+import { useArtworkPreload } from "../hooks/useArtworkPreload";
+import { usePlayerActor, usePlayerService } from "../state/PlayerServiceProvider";
 
-const DRAG_THRESHOLD = 120;
+
+const REWIND_THRESHOLD = 50;
+const SKIP_THRESHOLD = 120;
 const TRACK_OFFSET = 570;
 const ALBUM_SIZE = "520px";
 
 const parseRGB = (color: string): [number, number, number] => {
-  // Handle hex format (#fff or #ffffff)
   if (color.startsWith("#")) {
     let hex = color.slice(1);
     if (hex.length === 3) {
-      hex = hex.split("").map((c) => c + c).join("");
+      hex = hex
+        .split("")
+        .map((c) => c + c)
+        .join("");
     }
     const num = parseInt(hex, 16);
     return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
   }
-  // Handle rgb(r, g, b) format
   const match = color.match(/\d+/g);
   if (!match) return [120, 120, 120];
   const [r, g, b] = match.map(Number).slice(0, 3);
@@ -70,9 +74,13 @@ const getContrastColor = (color: string): "white" | "black" => {
 
   if (color.startsWith("#")) {
     const hex = color.slice(1);
-    const fullHex = hex.length === 3
-      ? hex.split("").map((c) => c + c).join("")
-      : hex;
+    const fullHex =
+      hex.length === 3
+        ? hex
+            .split("")
+            .map((c) => c + c)
+            .join("")
+        : hex;
     r = parseInt(fullHex.slice(0, 2), 16);
     g = parseInt(fullHex.slice(2, 4), 16);
     b = parseInt(fullHex.slice(4, 6), 16);
@@ -97,45 +105,40 @@ interface Props {
   onSkipNext?: () => void;
   onSkipPrev?: () => void;
   onSeek?: (positionMs: number) => void;
+  onTogglePlay?: () => void;
 }
 
-export const Player = ({ onSkipNext, onSkipPrev, onSeek }: Props) => {
-  const playerState = usePlayerStore((s) => s.playerState);
-  const queue = usePlayerStore((s) => s.queue);
+export const Player = ({ onSkipNext, onSkipPrev, onSeek, onTogglePlay }: Props) => {
+  const [machineState] = usePlayerActor();
+  const playerService = usePlayerService();
+  const queue = machineState.context.queue;
+  const playerState = machineState.context.player;
   const dominantColor = usePlayerStore((s) => s.dominantColor);
   const setArtworkTop = usePlayerStore((s) => s.setArtworkTop);
 
   const { currentTrack, isPlaying, tempo, positionMs } = playerState;
-  const { next, prev } = queue;
+
+  // Simple: derive display tracks directly from queue
+  // prev is chronological (oldest first), so last item is immediate previous
+  const displayCurrent = currentTrack ?? queue.current ?? null;
+  const displayPrev = queue.prev[queue.prev.length - 1] ?? null;
+  const displayNext = queue.next[0] ?? null;
+
+  const currentImageSrc = displayCurrent?.albumArtData || displayCurrent?.albumArtUrl;
+  const prevImageSrc = displayPrev?.albumArtData || displayPrev?.albumArtUrl;
+  const nextImageSrc = displayNext?.albumArtData || displayNext?.albumArtUrl;
+
+  // Preload incoming artwork
+  useArtworkPreload(displayNext?.albumArtData || displayNext?.albumArtUrl);
+  useArtworkPreload(displayPrev?.albumArtData || displayPrev?.albumArtUrl);
+
+  useDominantColor();
 
   const imgRef = useRef<HTMLImageElement>(null);
   const imgContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const isDraggingRef = useRef(false);
-  const [isDragAnimating, setIsDragAnimating] = useState(false);
-  const didCommitRef = useRef(false);
-  const commitDirectionRef = useRef<"next" | "prev" | null>(null);
-
-  type DragSnapshot = {
-    prev0: Track | null;
-    next0: Track | null;
-  };
-  const [dragSnapshot, setDragSnapshot] = useState<DragSnapshot | null>(null);
-
-  const currentImageSrc = currentTrack?.albumArtData || currentTrack?.albumArtUrl;
-  
-  const previewPrevTrack = isDragAnimating && dragSnapshot?.prev0
-    ? dragSnapshot.prev0
-    : prev[0] ?? null;
-  
-  const previewNextTrack = isDragAnimating && dragSnapshot?.next0
-    ? dragSnapshot.next0
-    : next[0] ?? null;
-
-  const prevImageSrc = previewPrevTrack?.albumArtData || previewPrevTrack?.albumArtUrl;
-  const nextImageSrc = previewNextTrack?.albumArtData || previewNextTrack?.albumArtUrl;
-
-  useDominantColor();
+  const lastDirectionRef = useRef<"next" | "prev" | null>(null);
 
   // Track artwork container position for lyrics alignment
   useEffect(() => {
@@ -153,39 +156,35 @@ export const Player = ({ onSkipNext, onSkipPrev, onSeek }: Props) => {
       observer.disconnect();
       window.removeEventListener("resize", updatePosition);
     };
-  }, [setArtworkTop, currentTrack]);
+  }, [setArtworkTop, displayCurrent]);
 
-  // === Glow colors derived from dominant color ===
+  // Glow colors derived from dominant color
   const rgb = useMemo(() => parseRGB(dominantColor), [dominantColor]);
   const rgbRef = useRef(rgb);
   rgbRef.current = rgb;
-  
+
   const glowSoft = useMemo(() => makeRGBA(rgb, 0.4), [rgb]);
   const glowMid = useMemo(() => makeRGBA(rgb, 0.7), [rgb]);
-  const bounceAnimate = useMemo(
-    () => createBounceAnimate(glowSoft, glowMid),
-    [glowSoft, glowMid]
-  );
+  const bounceAnimate = useMemo(() => createBounceAnimate(glowSoft, glowMid), [glowSoft, glowMid]);
 
   // === Single source of truth: dragX ===
   const dragX = useMotionValue(0);
   const dragXSpring = useSpring(dragX, { stiffness: 650, damping: 40, mass: 0.35 });
 
   // Progress 0→1 as approaching threshold
-  const dragProgress = useTransform(dragXSpring, (x) =>
-    Math.min(1, Math.abs(x) / DRAG_THRESHOLD)
-  );
+  // Progress for skip (strong drag)
+  const dragProgress = useTransform(dragXSpring, (x) => Math.min(1, Math.abs(x) / SKIP_THRESHOLD));
+  // Progress for rewind (slight drag right)
+  const rewindProgress = useTransform(dragXSpring, (x) => x > 0 ? Math.min(1, x / REWIND_THRESHOLD) : 0);
 
   // Direction: -1 (next), 0 (idle), 1 (prev)
-  const dragDirection = useTransform(dragXSpring, (x): number =>
-    x === 0 ? 0 : x > 0 ? 1 : -1
-  );
+  const dragDirection = useTransform(dragXSpring, (x): number => (x === 0 ? 0 : x > 0 ? 1 : -1));
 
   // Commit state: springs to 1 when threshold crossed
   const commitRaw = useTransform(dragProgress, (p): number => (p >= 1 ? 1 : 0));
   const commit = useSpring(commitRaw, { stiffness: 700, damping: 35 });
 
-  // === Pause state ===
+  // Pause state
   const pausedMultiplier = useMotionValue(isPlaying ? 0 : 1);
   const pausedMultiplierSpring = useSpring(pausedMultiplier, { damping: 25, stiffness: 700 });
 
@@ -195,114 +194,80 @@ export const Player = ({ onSkipNext, onSkipPrev, onSeek }: Props) => {
 
   const saturate = useTransform(pausedMultiplierSpring, (v) => 1 - v);
 
-  // === Drag-based effects for album art ===
-  const hueRotateRaw = useTransform(
-    dragXSpring,
-    [-DRAG_THRESHOLD, 0, DRAG_THRESHOLD],
-    [-25, 0, 25]
-  );
-  const hueRotate = useTransform(hueRotateRaw, (h) => 
-    isDraggingRef.current ? h : 0
-  );
+  // Drag-based effects for album art
+  const hueRotateRaw = useTransform(dragXSpring, [-SKIP_THRESHOLD, 0, SKIP_THRESHOLD], [-25, 0, 25]);
+  const hueRotate = useTransform(hueRotateRaw, (h) => (isDraggingRef.current ? h : 0));
 
   const coverBlurRaw = useTransform(dragProgress, [0, 1], [0, 6]);
-  const coverBlur = useTransform(coverBlurRaw, (b) =>
-    isDraggingRef.current ? b : 0
-  );
+  const coverBlur = useTransform(coverBlurRaw, (b) => (isDraggingRef.current ? b : 0));
 
-  const coverFilter = useTransform(
-    [saturate, hueRotate, coverBlur],
-    (latest) => {
-      const [s, h, b] = latest as [number, number, number];
-      const [r, g, blu] = rgbRef.current;
-      const glowRadius = 12 + b * 2;
-      return `saturate(${s}) hue-rotate(${h}deg) blur(${b}px) drop-shadow(0 0 ${glowRadius}px rgba(${r},${g},${blu},0.45))`;
-    }
-  );
+  const coverFilter = useTransform([saturate, hueRotate, coverBlur], (latest) => {
+    const [s, h, b] = latest as [number, number, number];
+    const [r, g, blu] = rgbRef.current;
+    const glowRadius = 12 + b * 2;
+    return `saturate(${s}) hue-rotate(${h}deg) blur(${b}px) drop-shadow(0 0 ${glowRadius}px rgba(${r},${g},${blu},0.45))`;
+  });
 
-  // === Current track scale/opacity/shadow ===
+  // Current track scale/opacity/shadow
   const baseScale = useTransform(dragProgress, [0, 1], [1, 1.03]);
   const commitScaleBoost = useTransform(commit, [0, 1], [0, 0.05]);
-  const currentScale = useTransform(
-    [baseScale, commitScaleBoost],
-    (latest) => {
-      const [b, c] = latest as [number, number];
-      return b + c;
-    }
-  );
+  const currentScale = useTransform([baseScale, commitScaleBoost], (latest) => {
+    const [b, c] = latest as [number, number];
+    return b + c;
+  });
 
   const currentOpacity = useTransform(dragProgress, [0, 1], [1, 0.85]);
-  const currentShadow = useTransform(
-    commit,
-    (c) => `0 18px 50px rgba(0,0,0,${0.22 + 0.25 * c})`
-  );
+  const currentShadow = useTransform(commit, (c) => `0 18px 50px rgba(0,0,0,${0.22 + 0.25 * c})`);
 
   // Commit overlay (bright flash when threshold crossed)
   const commitOverlayOpacity = useTransform(commit, [0, 1], [0, 0.25]);
 
+  // Preview positions
+  // Drag RIGHT (x > 0) → show PREV on LEFT sliding in from left
+  const prevPreviewX = useTransform(dragXSpring, [0, SKIP_THRESHOLD], [-TRACK_OFFSET, 0]);
 
+  // Drag LEFT (x < 0) → show NEXT on RIGHT sliding in from right
+  const nextPreviewX = useTransform(dragXSpring, [-SKIP_THRESHOLD, 0], [0, TRACK_OFFSET]);
 
-  // === Preview positions (snap to x=0 at threshold to align with current) ===
-  const prevPreviewX = useTransform(
-    dragXSpring,
-    [0, DRAG_THRESHOLD],
-    [-TRACK_OFFSET, 0]
-  );
+  const prevPreviewOpacity = useTransform([dragProgress, dragDirection], (latest) => {
+    const [p, dir] = latest as [number, number];
+    return dir > 0 ? Math.min(1, p * 1.5) : 0;
+  });
 
-  const nextPreviewX = useTransform(
-    dragXSpring,
-    [-DRAG_THRESHOLD, 0],
-    [0, TRACK_OFFSET]
-  );
+  const nextPreviewOpacity = useTransform([dragProgress, dragDirection], (latest) => {
+    const [p, dir] = latest as [number, number];
+    return dir < 0 ? Math.min(1, p * 1.5) : 0;
+  });
 
-  const prevPreviewOpacity = useTransform(
-    [dragProgress, dragDirection],
-    (latest) => {
-      const [p, dir] = latest as [number, number];
-      return dir > 0 ? Math.min(1, p * 1.5) : 0;
-    }
-  );
+  const prevPreviewScale = useTransform([commit, dragDirection], (latest) => {
+    const [c, dir] = latest as [number, number];
+    return dir > 0 ? 1 + c * 0.05 : 1;
+  });
 
-  const nextPreviewOpacity = useTransform(
-    [dragProgress, dragDirection],
-    (latest) => {
-      const [p, dir] = latest as [number, number];
-      return dir < 0 ? Math.min(1, p * 1.5) : 0;
-    }
-  );
+  const nextPreviewScale = useTransform([commit, dragDirection], (latest) => {
+    const [c, dir] = latest as [number, number];
+    return dir < 0 ? 1 + c * 0.05 : 1;
+  });
 
-  // Preview scale pop on commit
-  const prevPreviewScale = useTransform(
-    [commit, dragDirection],
-    (latest) => {
-      const [c, dir] = latest as [number, number];
-      return dir > 0 ? 1 + c * 0.05 : 1;
-    }
-  );
-  const nextPreviewScale = useTransform(
-    [commit, dragDirection],
-    (latest) => {
-      const [c, dir] = latest as [number, number];
-      return dir < 0 ? 1 + c * 0.05 : 1;
-    }
-  );
-
-  // === Label slide positions (slide into main label area from left/right) ===
-  // Current label slides down rapidly and fades when dragging
+  // Label slide positions
   const currentLabelY = useTransform(dragProgress, [0, 0.3, 1], [0, 80, 150]);
   const currentLabelOpacity = useTransform(dragProgress, [0, 0.2, 0.5], [1, 0.3, 0]);
-  
-  // Prev/next labels slide to position 0 (aligned with current)
-  const prevLabelX = useTransform(
-    dragXSpring,
-    [0, DRAG_THRESHOLD],
-    [-300, 0]
+
+  const prevLabelX = useTransform(dragXSpring, [0, SKIP_THRESHOLD], [-300, 0]);
+  const nextLabelX = useTransform(dragXSpring, [-SKIP_THRESHOLD, 0], [0, 300]);
+
+  // Indicator opacity - show when respective threshold reached
+  // Rewind: slight drag right (passes REWIND_THRESHOLD but not SKIP_THRESHOLD)
+  const rewindIndicatorOpacity = useTransform([rewindProgress, dragProgress, dragDirection], ([rp, sp, dir]) => 
+    (dir as number) > 0 && (rp as number) >= 1 && (sp as number) < 1 ? 1 : 0
   );
-  
-  const nextLabelX = useTransform(
-    dragXSpring,
-    [-DRAG_THRESHOLD, 0],
-    [0, 300]
+  // Prev: strong drag right (passes SKIP_THRESHOLD)
+  const prevIndicatorOpacity = useTransform([dragProgress, dragDirection], ([p, dir]) => 
+    (dir as number) > 0 && (p as number) >= 1 ? 1 : 0
+  );
+  // Next: strong drag left (passes SKIP_THRESHOLD)
+  const nextIndicatorOpacity = useTransform([dragProgress, dragDirection], ([p, dir]) => 
+    (dir as number) < 0 && (p as number) >= 1 ? 1 : 0
   );
 
   const bounceTransition = useMemo(
@@ -318,9 +283,7 @@ export const Player = ({ onSkipNext, onSkipPrev, onSeek }: Props) => {
   const contrastColor = getContrastColor(dominantColor);
 
   // Smooth progress interpolation
-  const progressPercent = currentTrack?.durationMs 
-    ? (positionMs / currentTrack.durationMs) * 100 
-    : 0;
+  const progressPercent = displayCurrent?.durationMs ? (positionMs / displayCurrent.durationMs) * 100 : 0;
   const progressTarget = useMotionValue(progressPercent);
   const smoothProgress = useSpring(progressTarget, { stiffness: 100, damping: 30 });
   const smoothProgressWidth = useTransform(smoothProgress, (v) => `${v}%`);
@@ -329,70 +292,56 @@ export const Player = ({ onSkipNext, onSkipPrev, onSeek }: Props) => {
     progressTarget.set(progressPercent);
   }, [progressPercent, progressTarget]);
 
+  const wasDraggingRef = useRef(false);
+
   const handleDragStart = () => {
     setIsDragging(true);
     isDraggingRef.current = true;
-    setIsDragAnimating(true);
-    didCommitRef.current = false;
-    commitDirectionRef.current = null;
-    setDragSnapshot({
-      prev0: prev[0] ?? null,
-      next0: next[0] ?? null,
-    });
+    wasDraggingRef.current = true;
   };
 
-  useMotionValueEvent(dragXSpring, "change", (value) => {
-    if (!isDragging && isDragAnimating && !didCommitRef.current && Math.abs(value) < 1) {
-      setIsDragAnimating(false);
-      setDragSnapshot(null);
-    }
-  });
-
-  useEffect(() => {
-    if (didCommitRef.current && isDragAnimating) {
-      animate(dragX, 0, {
-        type: "spring",
-        stiffness: 400,
-        damping: 30,
-        onComplete: () => {
-          setIsDragAnimating(false);
-          setDragSnapshot(null);
-          didCommitRef.current = false;
-          commitDirectionRef.current = null;
-        },
-      });
-    }
-  }, [currentTrack?.id, dragX, isDragAnimating]);
-
   const handleDragEnd = () => {
-    const finalX = dragX.get();
-    const didSkip =
-      (finalX > DRAG_THRESHOLD && prev[0]) ||
-      (finalX < -DRAG_THRESHOLD && next[0]);
+    const x = dragX.get();
 
-    if (finalX > DRAG_THRESHOLD && prev[0]) {
-      didCommitRef.current = true;
-      commitDirectionRef.current = "prev";
-      onSkipPrev?.();
-    } else if (finalX < -DRAG_THRESHOLD && next[0]) {
-      didCommitRef.current = true;
-      commitDirectionRef.current = "next";
+    if (x < -SKIP_THRESHOLD && displayNext) {
+      // Strong drag LEFT → next track
+      lastDirectionRef.current = "next";
+      playerService.send({ type: "USER_NEXT" });
       onSkipNext?.();
+    } else if (x > SKIP_THRESHOLD && displayPrev) {
+      // Strong drag RIGHT → previous track
+      lastDirectionRef.current = "prev";
+      playerService.send({ type: "USER_PREV", allowRewind: false, positionMs });
+      onSkipPrev?.();
+    } else if (x > REWIND_THRESHOLD) {
+      // Slight drag RIGHT → rewind current track
+      onSeek?.(0);
     }
 
-    if (!didSkip) {
-      animate(dragX, 0, {
-        type: "spring",
-        stiffness: 650,
-        damping: 40,
-      });
-    }
+    // Animate card back to center
+    animate(dragX, 0, { type: "spring", stiffness: 400, damping: 40 });
 
     setIsDragging(false);
     isDraggingRef.current = false;
+    
+    // Reset drag flag after a short delay to allow click detection
+    setTimeout(() => {
+      wasDraggingRef.current = false;
+    }, 50);
   };
 
-  if (!currentTrack) {
+  const handleAlbumClick = (e: React.MouseEvent) => {
+    // Ignore if we just finished dragging
+    if (wasDraggingRef.current) return;
+    
+    // Ignore clicks in the seek zone (top 20px)
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (e.clientY - rect.top < 20) return;
+    
+    onTogglePlay?.();
+  };
+
+  if (!displayCurrent) {
     return (
       <div className="flex items-center justify-center h-full">
         <p className="text-white/30 text-xl">Waiting for music...</p>
@@ -406,20 +355,45 @@ export const Player = ({ onSkipNext, onSkipPrev, onSeek }: Props) => {
         <div className="relative flex h-full w-full flex-col justify-end gap-4 px-4">
           {/* Album Art with Drag */}
           <div className="relative" ref={imgContainerRef} style={{ width: ALBUM_SIZE }}>
+            {/* Action indicators - fixed position, horizontally centered, upper area */}
+            <div className="fixed top-[30px] left-1/2 -translate-x-1/2 pointer-events-none z-50 w-12 h-12">
+              {/* Rewind indicator (slight drag right) */}
+              <motion.div className="absolute inset-0" style={{ opacity: rewindIndicatorOpacity }}>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill={contrastColor}>
+                  <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+                </svg>
+              </motion.div>
+              
+              {/* Previous indicator (strong drag right) */}
+              <motion.div className="absolute inset-0" style={{ opacity: prevIndicatorOpacity }}>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill={contrastColor}>
+                  <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                </svg>
+              </motion.div>
+              
+              {/* Next indicator (strong drag left) */}
+              <motion.div className="absolute inset-0" style={{ opacity: nextIndicatorOpacity }}>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill={contrastColor}>
+                  <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                </svg>
+              </motion.div>
+            </div>
+            
             {/* Draggable Current Track */}
             <motion.div
               drag="x"
               dragConstraints={{ left: -300, right: 300 }}
               dragElastic={0.1}
               dragMomentum={false}
-              className="cursor-grab active:cursor-grabbing relative album-floating-shadow"
-              style={{ 
+              className="cursor-pointer relative album-floating-shadow z-30"
+              style={{
                 x: dragX,
                 // @ts-expect-error CSS custom property
                 "--album-glow": glowMid,
               }}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
+              onClick={handleAlbumClick}
             >
               <motion.div
                 style={{
@@ -432,7 +406,18 @@ export const Player = ({ onSkipNext, onSkipPrev, onSeek }: Props) => {
                 {/* Wrapper for bounce animation - includes progress bar */}
                 <motion.div
                   className="relative"
-                  animate={isDragging ? undefined : bounceAnimate}
+                  animate={
+                    !isDragging
+                      ? bounceAnimate
+                      : {
+                          rotateX: 0,
+                          rotateY: 0,
+                          rotateZ: 0,
+                          scale: 1,
+                          y: 0,
+                          boxShadow: bounceAnimate.boxShadow[0],
+                        }
+                  }
                   transition={bounceTransition}
                   style={{
                     transformOrigin: "center center",
@@ -440,40 +425,47 @@ export const Player = ({ onSkipNext, onSkipPrev, onSeek }: Props) => {
                     willChange: "transform",
                   }}
                 >
-                  {/* Progress bar - full height overlay, fills left to right */}
-                  <div 
-                    className="absolute top-0 left-0 z-30 cursor-pointer opacity-40 hover:opacity-70 transition-opacity"
+                  {/* Progress bar visual - full height, non-interactive */}
+                  <div
+                    className="absolute top-0 left-0 z-20 pointer-events-none opacity-40"
                     style={{ width: ALBUM_SIZE, height: ALBUM_SIZE }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!currentTrack || !onSeek) return;
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const x = e.clientX - rect.left;
-                      const percent = x / rect.width;
-                      onSeek(Math.floor(percent * currentTrack.durationMs));
-                    }}
                   >
-                    <motion.div 
+                    <motion.div
                       className="absolute inset-y-0 left-0"
-                      style={{ 
+                      style={{
                         width: smoothProgressWidth,
                         background: `linear-gradient(90deg, ${dominantColor}, ${dominantColor})`,
                         mixBlendMode: "color",
                         opacity: 0.6,
                       }}
                     />
-                    {/* Time indicator above handle */}
-                    <motion.div
-                      className="absolute top-0 pointer-events-none"
-                      style={{ left: smoothProgressWidth }}
-                    >
-                      <span 
-                        className="absolute left-1/2 -translate-x-1/2 -top-5 text-[10px] font-medium tabular-nums text-white/70"
+                    {/* Time indicator */}
+                    <motion.div className="absolute top-0" style={{ left: smoothProgressWidth }}>
+                      <span
+                        className="absolute left-1/2 -translate-x-1/2 -top-5 text-[10px] font-medium tabular-nums"
+                        style={{
+                          color: contrastColor,
+                          textShadow: "0 0 6px rgba(0,0,0,0.45), 0 0 2px rgba(0,0,0,0.35)",
+                        }}
                       >
                         {formatTime(positionMs)}
                       </span>
                     </motion.div>
                   </div>
+
+                  {/* Seek zone - top 20px only */}
+                  <div
+                    className="absolute top-0 left-0 z-30 cursor-pointer hover:bg-white/10 transition-colors"
+                    style={{ width: ALBUM_SIZE, height: "20px" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!displayCurrent || !onSeek) return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const x = e.clientX - rect.left;
+                      const percent = x / rect.width;
+                      onSeek(Math.floor(percent * displayCurrent.durationMs));
+                    }}
+                  />
 
                   {/* Commit overlay */}
                   <motion.div
@@ -496,9 +488,7 @@ export const Player = ({ onSkipNext, onSkipPrev, onSeek }: Props) => {
 
                   <img
                     ref={imgRef}
-                    style={{
-                      width: ALBUM_SIZE,
-                    }}
+                    style={{ width: ALBUM_SIZE }}
                     draggable={false}
                     className="overflow-hidden border border-gray-500 rounded-sm border-opacity-30"
                     src={currentImageSrc || ""}
@@ -507,10 +497,10 @@ export const Player = ({ onSkipNext, onSkipPrev, onSeek }: Props) => {
               </motion.div>
             </motion.div>
 
-            {/* Previous Track Preview - higher z-index to appear above current */}
+            {/* Previous Track Preview (appears when dragging RIGHT) */}
             {prevImageSrc && (
               <motion.div
-                className="absolute top-0 pointer-events-none z-20"
+                className="absolute top-0 pointer-events-none z-10"
                 style={{
                   width: ALBUM_SIZE,
                   height: ALBUM_SIZE,
@@ -529,10 +519,10 @@ export const Player = ({ onSkipNext, onSkipPrev, onSeek }: Props) => {
               </motion.div>
             )}
 
-            {/* Next Track Preview - higher z-index to appear above current */}
+            {/* Next Track Preview (appears when dragging LEFT) */}
             {nextImageSrc && (
               <motion.div
-                className="absolute top-0 pointer-events-none z-20"
+                className="absolute top-0 pointer-events-none z-10"
                 style={{
                   width: ALBUM_SIZE,
                   height: ALBUM_SIZE,
@@ -553,14 +543,14 @@ export const Player = ({ onSkipNext, onSkipPrev, onSeek }: Props) => {
           </div>
 
           {/* Track Info - with sliding labels */}
-          <div 
+          <div
             className="relative max-w-[520px] xl:max-w-none"
-            style={{ 
+            style={{
               color: contrastColor === "white" ? "rgb(255,255,255)" : "rgb(0,0,0)",
             }}
           >
             {/* Previous Track Label - slides in from left */}
-            {previewPrevTrack && (
+            {displayPrev && (
               <motion.div
                 className="absolute inset-0 pointer-events-none"
                 style={{
@@ -569,21 +559,17 @@ export const Player = ({ onSkipNext, onSkipPrev, onSeek }: Props) => {
                 }}
               >
                 <div className="flex flex-col justify-end gap-0.5">
-                  <div className="flex items-end font-light text-current/70">
-                    {previewPrevTrack.album}
-                  </div>
-                  <div className="text-3xl font-bold xl:text-5xl">
-                    {previewPrevTrack.name}
-                  </div>
+                  <div className="flex items-end font-light text-current/70">{displayPrev.album}</div>
+                  <div className="text-3xl font-bold xl:text-5xl">{displayPrev.name}</div>
                   <div className="flex items-end mt-2 font-light text-current/70">
-                    {previewPrevTrack.artists?.join(", ")}
+                    {displayPrev.artists?.join(", ")}
                   </div>
                 </div>
               </motion.div>
             )}
 
             {/* Next Track Label - slides in from right */}
-            {previewNextTrack && (
+            {displayNext && (
               <motion.div
                 className="absolute inset-0 pointer-events-none"
                 style={{
@@ -592,40 +578,44 @@ export const Player = ({ onSkipNext, onSkipPrev, onSeek }: Props) => {
                 }}
               >
                 <div className="flex flex-col justify-end gap-0.5">
-                  <div className="flex items-end font-light text-current/70">
-                    {previewNextTrack.album}
-                  </div>
-                  <div className="text-3xl font-bold xl:text-5xl">
-                    {previewNextTrack.name}
-                  </div>
+                  <div className="flex items-end font-light text-current/70">{displayNext.album}</div>
+                  <div className="text-3xl font-bold xl:text-5xl">{displayNext.name}</div>
                   <div className="flex items-end mt-2 font-light text-current/70">
-                    {previewNextTrack.artists?.join(", ")}
+                    {displayNext.artists?.join(", ")}
                   </div>
                 </div>
               </motion.div>
             )}
 
-            {/* Current Track Label - slides down when dragging */}
-            <motion.div
-              style={{
-                perspective: "800px",
-                opacity: currentLabelOpacity,
-                y: currentLabelY,
-              }}
-              className="flex flex-col justify-end gap-0.5"
-            >
-              <div className="flex items-end font-light">
-                {currentTrack.album}
-              </div>
-              <div className="text-3xl font-bold xl:text-5xl">
-                {currentTrack.name}
-              </div>
-              <div className="flex items-end mt-2 font-light">
-                {currentTrack.artists.join(", ")}
-              </div>
-            </motion.div>
+            {/* Current Track Label */}
+            <AnimatePresence mode="wait" initial={false}>
+              {displayCurrent && (
+                <motion.div
+                  key={displayCurrent.id}
+                  initial={{
+                    opacity: 0,
+                    x: lastDirectionRef.current === "next" ? 22 : lastDirectionRef.current === "prev" ? -22 : 0,
+                  }}
+                  animate={{ opacity: 1, x: 0, transition: { type: "spring", stiffness: 520, damping: 38 } }}
+                  exit={{
+                    opacity: 0,
+                    x: lastDirectionRef.current === "next" ? -18 : lastDirectionRef.current === "prev" ? 18 : 0,
+                    transition: { duration: 0.18 },
+                  }}
+                  style={{
+                    perspective: "800px",
+                    opacity: currentLabelOpacity,
+                    y: currentLabelY,
+                  }}
+                  className="flex flex-col justify-end gap-0.5"
+                >
+                  <div className="flex items-end font-light">{displayCurrent.album}</div>
+                  <div className="text-3xl font-bold xl:text-5xl">{displayCurrent.name}</div>
+                  <div className="flex items-end mt-2 font-light">{displayCurrent.artists.join(", ")}</div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-
         </div>
 
         {/* Lyrics placeholder */}

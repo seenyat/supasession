@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { usePlayerStore } from "../stores/playerStore";
+import { usePlayerService } from "../state/PlayerServiceProvider";
 import { ListMusic } from "lucide-react";
+import type { Track } from "@supasession/shared";
 
 const ScrollingText = ({ children, className }: { children: string; className?: string }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -69,12 +71,17 @@ const getContrastColor = (color: string): "white" | "black" => {
 export const Session = () => {
   const dominantColor = usePlayerStore((s) => s.dominantColor);
   const queue = usePlayerStore((s) => s.queue);
+  const service = usePlayerService();
   const [isQueueOpen, setIsQueueOpen] = useState(false);
 
   const contrastColor = getContrastColor(dominantColor);
   const { next, prev } = queue;
 
   const textColor = contrastColor === "white" ? "text-white" : "text-black";
+
+  const handleTrackClick = (track: Track) => {
+    service.send({ type: "USER_SELECT", trackId: track.id });
+  };
 
   return (
     <div className="relative h-full">
@@ -93,13 +100,14 @@ export const Session = () => {
             className="flex flex-col gap-5 mb-6 max-h-[50vh] overflow-y-auto pb-2"
             style={{ scrollbarWidth: "none" }}
           >
-            {prev.slice(-2).reverse().map((track, i) => (
+            {prev.slice(-2).map((track, i) => (
               <motion.div
                 key={track.id + "prev" + i}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05, duration: 0.4 }}
                 className="flex items-center gap-3 group cursor-pointer"
+                onClick={() => handleTrackClick(track)}
               >
                 {(track.albumArtData || track.albumArtUrl) && (
                   <motion.img
@@ -139,6 +147,7 @@ export const Session = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: (prev.slice(-2).length + 1 + i) * 0.05, duration: 0.4 }}
                 className="flex items-center gap-3 group cursor-pointer"
+                onClick={() => handleTrackClick(track)}
               >
                 {(track.albumArtData || track.albumArtUrl) && (
                   <motion.img

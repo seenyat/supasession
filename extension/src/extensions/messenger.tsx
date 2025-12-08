@@ -113,6 +113,7 @@ const extractTrack = (queueTrack: any): Track => {
   
   return {
     id: queueTrack?.contextTrack?.uri || "",
+    uid: queueTrack?.contextTrack?.uid || "",
     name: meta.title || "",
     artists: meta.artist_name ? [meta.artist_name] : [],
     album: meta.album_title || "",
@@ -507,9 +508,10 @@ class SupaSessionMessenger {
       }
     }
     
+    // For prev, fetch images for LAST 2 (most recent) since prev is chronological (oldest first)
     const prev: Track[] = [];
     for (let i = 0; i < rawPrev.length; i++) {
-      if (i < 2) {
+      if (i >= rawPrev.length - 2) {
         const trackWithImage = await extractTrackWithImage(rawPrev[i].raw);
         if (trackWithImage) prev.push(trackWithImage);
       } else {
@@ -604,12 +606,101 @@ class SupaSessionMessenger {
       case "previous":
         player.back?.();
         break;
+      case "skipPrevious": {
+        // Use the undocumented skipToPrevious which doesn't rewind
+        const playerAPI = Spicetify?.Platform?.PlayerAPI;
+        if (playerAPI?.skipToPrevious) {
+          playerAPI.skipToPrevious();
+        } else {
+          // Fallback to regular back
+          player.back?.();
+        }
+        break;
+      }
+      case "skipTo": {
+        // Use play to jump directly to a specific track in queue
+        const playerAPI = Spicetify?.Platform?.PlayerAPI;
+        const context = Spicetify?.Player?.data?.context;
+        if (playerAPI?.play && payload.trackUri && context) {
+          playerAPI.play(
+            { uri: context.uri },
+            {},
+            { skipTo: { uri: payload.trackUri, uid: payload.trackUid } }
+          );
+        }
+        break;
+      }
+      case "playTrack": {
+        // Play a specific track within the current context (works for any track, including history)
+        const playerAPI = Spicetify?.Platform?.PlayerAPI;
+        const context = Spicetify?.Player?.data?.context;
+        if (playerAPI?.play && payload.trackId && context) {
+          playerAPI.play(
+            { uri: context.uri },
+            {},
+            { skipTo: { uri: payload.trackId } }
+          );
+        }
+        break;
+      }
       case "seek":
         player.seek?.(payload.positionMs);
         break;
       case "setVolume":
         player.setVolume?.(payload.volume / 100);
         break;
+      case "debug": {
+        // Explore Spicetify APIs and send back through relay
+        const playerAPI = Spicetify?.Platform?.PlayerAPI;
+        const debugInfo: Record<string, any> = {
+          playerDataContext: Spicetify?.Player?.data?.context,
+          playerAPIKeys: Object.keys(playerAPI || {}),
+          queueTrack: Spicetify?.Queue?.track?.contextTrack,
+          queuePrevTrackLast: Spicetify?.Queue?.prevTracks?.[Spicetify?.Queue?.prevTracks?.length - 1]?.contextTrack,
+          prevTracksLength: Spicetify?.Queue?.prevTracks?.length,
+        };
+        
+        // Get PlayerAPI methods
+        if (playerAPI) {
+          debugInfo.playerAPIMethods = {};
+          for (const key of Object.keys(playerAPI)) {
+            debugInfo.playerAPIMethods[key] = typeof (playerAPI as any)[key];
+          }
+          // Check prototype
+          const proto = Object.getPrototypeOf(playerAPI);
+          if (proto) {
+            debugInfo.playerAPIProtoMethods = {};
+            for (const key of Object.getOwnPropertyNames(proto)) {
+              if (key !== 'constructor') {
+                debugInfo.playerAPIProtoMethods[key] = typeof proto[key];
+              }
+            }
+          }
+          // Check for skip methods
+          const methods = ['skipToPrevious', 'skipToNext', 'skipBack', 'skipForward', 'playFromQueue', 'skipTo', 'updateContext'];
+          debugInfo.skipMethods = {};
+          for (const m of methods) {
+            debugInfo.skipMethods[m] = typeof (playerAPI as any)?.[m];
+          }
+          // Check _state
+          if ((playerAPI as any)?._state) {
+            debugInfo.playerAPIState = Object.keys((playerAPI as any)._state);
+          }
+        }
+        
+        // Check Platform for other APIs
+        debugInfo.platformKeys = Object.keys(Spicetify?.Platform || {});
+        
+        // Send back through relay
+        this.send({
+          v: 1,
+          sessionId: this.sessionId,
+          kind: "debug_response",
+          ts: Date.now(),
+          payload: debugInfo,
+        });
+        break;
+      }
     }
   }
 }

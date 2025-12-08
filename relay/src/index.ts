@@ -1,4 +1,5 @@
 import { WebSocketServer, WebSocket } from "ws";
+import { createServer } from "http";
 import * as Effect from "effect/Effect";
 import * as S from "@effect/schema/Schema";
 import {
@@ -18,11 +19,13 @@ interface Client {
 
 const producers = new Map<string, Client>();
 const consumers = new Map<string, Set<Client>>();
+const queueVersions = new Map<string, number>();
 
 // Cache last state per session for new consumers
 const lastPlayerState = new Map<string, AnyMessage>();
 const lastQueueState = new Map<string, AnyMessage>();
 const lastLyrics = new Map<string, AnyMessage>();
+const lastDebugResponse = new Map<string, any>();
 
 const generateSessionId = () => {
   const bytes = new Uint8Array(16);
@@ -78,14 +81,26 @@ const handleMessage = (client: Client, raw: string) => {
       lastPlayerState.set(client.sessionId, message);
       broadcastToConsumers(client.sessionId, message);
     } else if (message.kind === "queue_update") {
-      lastQueueState.set(client.sessionId, message);
-      broadcastToConsumers(client.sessionId, message);
+      const currentVersion = queueVersions.get(client.sessionId) ?? 0;
+      const nextVersion = currentVersion + 1;
+      queueVersions.set(client.sessionId, nextVersion);
+      const withVersion = {
+        ...message,
+        payload: { ...message.payload, version: nextVersion },
+      };
+      lastQueueState.set(client.sessionId, withVersion);
+      broadcastToConsumers(client.sessionId, withVersion);
     } else if (message.kind === "lyrics") {
       lastLyrics.set(client.sessionId, message);
       broadcastToConsumers(client.sessionId, message);
+    } else if ((message as any).kind === "debug_response") {
+      // Cache debug response for API retrieval
+      lastDebugResponse.set(client.sessionId, (message as any).payload);
+      console.log("[Debug Response]", JSON.stringify((message as any).payload, null, 2));
     }
   } else if (client.role === "consumer") {
     if (message.kind === "control") {
+      console.log(`[Control] ${JSON.stringify(message.payload)}`);
       forwardToProducer(client.sessionId, message);
     }
   }
@@ -236,6 +251,106 @@ const handleConnection = (ws: WebSocket, sessionId: string | null, autoJoin: boo
     console.error("WebSocket error:", err);
   });
 };
+
+// HTTP server for API endpoints
+const HTTP_PORT = Number(process.env.HTTP_PORT) || 17778;
+
+const httpServer = createServer((req, res) => {
+  // CORS headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+
+  const url = new URL(req.url || "", `http://localhost:${HTTP_PORT}`);
+
+  // GET /api/debug - send debug command and wait for response
+  if (url.pathname === "/api/debug" && req.method === "GET") {
+    const sessions = getActiveSessions();
+    if (sessions.length === 0) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "No active sessions" }));
+      return;
+    }
+    const sessionId = sessions[0];
+    // Clear old response
+    lastDebugResponse.delete(sessionId);
+    forwardToProducer(sessionId, {
+      v: 1,
+      sessionId,
+      kind: "control",
+      ts: Date.now(),
+      payload: { command: "debug" },
+    });
+    // Wait for response (poll for up to 3 seconds)
+    let attempts = 0;
+    const checkResponse = () => {
+      attempts++;
+      const response = lastDebugResponse.get(sessionId);
+      if (response) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(response, null, 2));
+      } else if (attempts < 30) {
+        setTimeout(checkResponse, 100);
+      } else {
+        res.writeHead(504, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Timeout waiting for debug response" }));
+      }
+    };
+    setTimeout(checkResponse, 100);
+    return;
+  }
+
+  // GET /api/sessions - list active sessions
+  if (url.pathname === "/api/sessions" && req.method === "GET") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ sessions: getActiveSessions() }));
+    return;
+  }
+
+  // POST /api/control - send any control command
+  if (url.pathname === "/api/control" && req.method === "POST") {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      try {
+        const { command, sessionId: reqSessionId, ...rest } = JSON.parse(body);
+        const sessions = getActiveSessions();
+        const sessionId = reqSessionId || sessions[0];
+        if (!sessionId) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "No active sessions" }));
+          return;
+        }
+        forwardToProducer(sessionId, {
+          v: 1,
+          sessionId,
+          kind: "control",
+          ts: Date.now(),
+          payload: { command, ...rest },
+        });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: true, sessionId, command }));
+      } catch (e) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid JSON" }));
+      }
+    });
+    return;
+  }
+
+  res.writeHead(404, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ error: "Not found" }));
+});
+
+httpServer.listen(HTTP_PORT, () => {
+  console.log(`📡 HTTP API running on http://localhost:${HTTP_PORT}`);
+});
 
 const wss = new WebSocketServer({ port: PORT });
 
