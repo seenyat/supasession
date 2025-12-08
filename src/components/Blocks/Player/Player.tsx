@@ -1,10 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Track } from '../../../types/types';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   motion,
-  useAnimation,
   useAnimationControls,
-  useAnimationFrame,
   useMotionValue,
   useSpring,
   useTransform,
@@ -15,7 +12,33 @@ import {
   beatDurationInMilliseconds,
   getContrastColor,
 } from '../../../utils/functions';
+
 const springConfig = { damping: 25, stiffness: 700 };
+const DRAG_THRESHOLD = 200;
+const TRACK_OFFSET = 440;
+
+const BOUNCE_ANIMATE = {
+  rotateX: [0, 1, 0, -1],
+  rotateY: [0, 1, 0, -1],
+  rotateZ: [0, 1, 0, -1],
+  scale: [1, 1.01, 1.01, 1],
+  y: [0, 1, 0, 1],
+  boxShadow: [
+    '-5px 10px 4px rgba(0,0,0,0.25)',
+    '-5px 5px 2px rgba(0,0,0,0.25)',
+    '-5px 10px 4px rgba(0,0,0,0.25)',
+    '-5px 5px 4px rgba(0,0,0,0.25)',
+  ],
+} as const;
+
+const DRAG_ANIMATE = {
+  rotateX: 0,
+  rotateY: 0,
+  rotateZ: 0,
+  scale: 1.01,
+  y: 0,
+  boxShadow: '-5px 5px 5px rgba(0,0,0,0.25)',
+} as const;
 
 const addOpacityToRgbColour = (rgbColour: string, opacity: number) => {
   const matchedColors = rgbColour.match(/\d+/g);
@@ -23,7 +46,9 @@ const addOpacityToRgbColour = (rgbColour: string, opacity: number) => {
   return `rgba(${r},${g},${b},${opacity})`;
 };
 
+let playerRenderCount = 0;
 const Player = () => {
+  console.log('[Player] component render #', ++playerRenderCount);
   const { queue } = useQueue();
   const lyricsRef = useRef<HTMLDivElement>(null);
   const { current, next, prev } = queue;
@@ -33,14 +58,20 @@ const Player = () => {
   const setQrColor = usePlayerStore((state) => state.setQrColor);
   const audioData = usePlayerStore((state) => state.audioData);
   const setAudioData = usePlayerStore((state) => state.setAudioData);
-  const pausedMultiplier = useMotionValue(Spicetify.Player.isPlaying() ? 0 : 1);
+  const pausedMultiplier = useMotionValue(Spicetify?.Player?.isPlaying?.() ? 0 : 1);
   const pausedMultiplierSpring = useSpring(pausedMultiplier, springConfig);
   const imgRef = useRef<HTMLImageElement>(null);
   const imgContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const nextTrackControls = useAnimationControls();
   const previousTrackControls = useAnimationControls();
   const currentTrackControls = useAnimationControls();
+
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
 
   const isNextOpacity = useMotionValue(0.6);
   const isPreviousOpacity = useMotionValue(0.4);
@@ -48,30 +79,27 @@ const Player = () => {
   const hueRotateValue = useTransform(hueRotateSource, [0, 1], [0, 30]);
   const blurAmount = useTransform(hueRotateSource, [0, 1], [0, 30]);
 
-  const [qrColor, hexQrColor] = useQrColor({ imgRef }, queue);
+  const currentImageUrl = current?.contextTrack?.metadata?.image_xlarge_url;
+  const [qrColor, hexQrColor] = useQrColor({ imgRef, src: currentImageUrl });
   useLyricsPlus();
 
   useEffect(() => {
-    const update: (data: any) => void = ({ data }) => {
+    const update = ({ data }: { data: { is_paused: boolean } }) => {
       pausedMultiplier.set(data.is_paused ? 1 : 0);
-      if (!data.is_paused) {
-        // animate('div', {});
-      } else {
-      }
     };
     setTimeout(() => {
       isNextOpacity.set(0);
       isPreviousOpacity.set(0);
     }, 500);
-    // @ts-ignore
-    Spicetify.Player.addEventListener('onplaypause', update);
-    // @ts-ignore
-    return () => Spicetify.Player.removeEventListener('onplaypause', update);
+
+    Spicetify?.Player?.addEventListener?.('onplaypause', update);
+    return () => Spicetify?.Player?.removeEventListener?.('onplaypause', update);
   }, []);
 
   useEffect(() => {
-    Spicetify.getAudioData().then((data) => {
-      if (audioData.tempo !== data.track.tempo) {
+    if (!current) return;
+    Spicetify?.getAudioData?.()?.then((data) => {
+      if (data?.track) {
         setAudioData({
           tempo: beatDurationInMilliseconds(
             data.track.tempo.toFixed(0),
@@ -81,8 +109,7 @@ const Player = () => {
         });
       }
     });
-    return () => {};
-  }, [Spicetify.Player.data.track, audioData]);
+  }, [current?.contextTrack?.uri]); // Only fetch when track URI changes
 
   useEffect(() => {
     const x = setInterval(() => {
@@ -118,9 +145,20 @@ const Player = () => {
     pausedMultiplierSpring,
     (v: number) => `saturate(${1 - v})`
   );
+
+  const bounceTransition = useMemo(
+    () => ({
+      duration: Math.max(0.5, audioData.tempo / 125),
+      ease: 'easeInOut' as const,
+      repeat: Infinity,
+      repeatType: 'mirror' as const,
+    }),
+    [audioData.tempo]
+  );
+
   return (
     <>
-      <div className="w-full border ">
+      <div className="w-full">
         <div className="grid h-full pb-12 xl:grid-cols-[4fr_3fr]">
           <div
             id="view"
@@ -131,125 +169,49 @@ const Player = () => {
                 <motion.div
                   drag="x"
                   className="cursor-grab"
-                  style={{
-                    filter,
-                  }}
-                  layout
-                  onDragStart={() => {
-                    setIsDragging(true);
-                  }}
-                  whileDrag={{
-                    scale: 1.05,
-                  }}
+                  style={{ filter }}
+                  onDragStart={() => setIsDragging(true)}
+                  whileDrag={{ scale: 1.05 }}
                   onDrag={(e, info) => {
-                    if (currentTrackControls) {
-                      hueRotateSource.set(Math.abs(info.offset.x) / 100);
-                      transitionAnimation?.set({
-                        opacity: 1 - hueRotateSource.get(),
-                      });
+                    if (!isMounted) return;
+                    hueRotateSource.set(Math.abs(info.offset.x) / 100);
+                    transitionAnimation?.set({
+                      opacity: 1 - hueRotateSource.get(),
+                    });
+                    currentTrackControls.set({
+                      opacity: Math.abs(+(50 / info.offset.x).toFixed(3)),
+                      scale: hueRotateSource.get() * 0.2 + 1,
+                      filter: `hue-rotate(0) blur(${Math.round(hueRotateSource.get() * 5)}px)`,
+                    });
+                    if (Math.abs(info.offset.x) > 100) {
                       currentTrackControls.set({
-                        opacity: Math.abs(+(50 / info.offset.x).toFixed(3)),
-                        scale: hueRotateSource.get() * 0.2 + 1,
-                        filter: `hue-rotate(0) blur(${Math.round(
-                          hueRotateSource.get() * 5
-                        )}px)`,
-                        // x: info.offset.x,
+                        filter: `hue-rotate(${360 - hueRotateValue.get()}deg) blur(${Math.round(hueRotateSource.get() * 5)}px)`,
                       });
-                      console.log(Math.round(hueRotateSource.get() * 100));
-                      360 - hueRotateValue.get();
-                      if (Math.abs(info.offset.x) > 100) {
-                        currentTrackControls.set({
-                          filter: `hue-rotate(${
-                            360 - hueRotateValue.get()
-                          }deg) blur(${Math.round(
-                            hueRotateSource.get() * 5
-                          )}px)`,
-                        });
-                      }
                     }
                     if (info.offset.x) {
-                      if (info.offset.x > 200) {
-                        previousTrackControls.start(
-                          { opacity: 1 },
-                          {
-                            type: 'spring',
-                            duration: 0.15,
-                          }
-                        );
-                      } else if (info.offset.x < -200) {
-                        nextTrackControls.start(
-                          { opacity: 1 },
-                          {
-                            type: 'spring',
-                            duration: 0.15,
-                          }
-                        );
+                      if (info.offset.x > DRAG_THRESHOLD) {
+                        previousTrackControls.start({ opacity: 1 }, { type: 'spring', duration: 0.15 });
+                      } else if (info.offset.x < -DRAG_THRESHOLD) {
+                        nextTrackControls.start({ opacity: 1 }, { type: 'spring', duration: 0.15 });
                       } else {
-                        if (previousTrackControls) {
-                          previousTrackControls.set({
-                            opacity: 0.6,
-                            x: info.offset.x - 440,
-                          });
-                        }
-                        if (nextTrackControls) {
-                          nextTrackControls.set({
-                            opacity: 0.6,
-                            x: 440 - Math.abs(Math.min(info.offset.x, 0)) * 1.5,
-                          });
-                        }
+                        previousTrackControls.set({ opacity: 0.6, x: info.offset.x - TRACK_OFFSET });
+                        nextTrackControls.set({ opacity: 0.6, x: TRACK_OFFSET - Math.abs(Math.min(info.offset.x, 0)) * 1.5 });
                       }
                     }
                   }}
                   onDragEnd={(e, info) => {
-                    if (previousTrackControls) {
-                      transitionAnimation?.set({
-                        opacity: 1,
-                      });
-                      previousTrackControls.start(
-                        {
-                          opacity: 0,
-                          x: -440,
-                        },
-                        {
-                          type: 'tween',
-                          duration: 0,
-                        }
-                      );
-                    }
-                    if (nextTrackControls) {
-                      nextTrackControls.start(
-                        {
-                          opacity: 0,
-                          x: 440,
-                        },
-                        {
-                          type: 'tween',
-                          duration: 0,
-                        }
-                      );
-                    }
-                    if (currentTrackControls) {
-                      currentTrackControls.start(
-                        {
-                          opacity: 1,
-                          x: 0,
-                          scale: 1,
-                          filter: 'hue-rotate(0) blur(0px)',
-                        },
-                        {
-                          type: 'spring',
-                          duration: 0.3,
-                        }
-                      );
-                    }
-                    if (info.offset.x > 0) {
-                      if (info.offset.x > 200) {
-                        Spicetify.Player.back();
-                      }
-                    } else {
-                      if (info.offset.x < -200) {
-                        Spicetify.Player.next();
-                      }
+                    if (!isMounted) return;
+                    transitionAnimation?.set({ opacity: 1 });
+                    previousTrackControls.start({ opacity: 0, x: -TRACK_OFFSET }, { type: 'tween', duration: 0 });
+                    nextTrackControls.start({ opacity: 0, x: TRACK_OFFSET }, { type: 'tween', duration: 0 });
+                    currentTrackControls.start(
+                      { opacity: 1, x: 0, scale: 1, filter: 'hue-rotate(0) blur(0px)' },
+                      { type: 'spring', duration: 0.3 }
+                    );
+                    if (info.offset.x > DRAG_THRESHOLD) {
+                      Spicetify?.Player?.back?.();
+                    } else if (info.offset.x < -DRAG_THRESHOLD) {
+                      Spicetify?.Player?.next?.();
                     }
                     hueRotateSource.set(0);
                     setIsDragging(false);
@@ -264,66 +226,46 @@ const Player = () => {
                     <>
                       {
                         <>
-                          {prev[0]?.contextTrack?.metadata.image_xlarge_url && (
+                          {prev[0]?.contextTrack?.metadata?.image_xlarge_url && (
                             <motion.div>
                               <motion.img
-                                ref={imgRef}
                                 style={{
                                   width: '400px',
                                   height: '400px',
                                   zIndex: 20,
                                   position: 'absolute',
-                                  x: -440,
-                                  boxShadow: `1px 2px 8px rgb(0,0,0,0.3)`,
+                                  x: -TRACK_OFFSET,
+                                  boxShadow: '1px 2px 8px rgb(0,0,0,0.3)',
                                   transformOrigin: 'bottom left',
                                 }}
                                 animate={previousTrackControls}
-                                initial={{
-                                  opacity: 0,
-                                }}
-                                transition={{
-                                  duration: 0.2,
-                                }}
+                                initial={{ opacity: 0 }}
+                                transition={{ duration: 0.2 }}
                                 draggable={false}
-                                className="overflow-hidden border border-gray-500 rounded-sm border-opacity-30 "
-                                src={
-                                  prev[0]
-                                    ? prev[0]?.contextTrack?.metadata
-                                        ?.image_xlarge_url
-                                    : ''
-                                }
+                                className="overflow-hidden border border-gray-500 rounded-sm border-opacity-30"
+                                src={prev[0]?.contextTrack?.metadata?.image_xlarge_url || ''}
                               />
                             </motion.div>
                           )}
-                          {next[0]?.contextTrack?.metadata && (
+                          {next[0]?.contextTrack?.metadata?.image_xlarge_url && (
                             <motion.div>
                               <motion.img
-                                ref={imgRef}
                                 style={{
                                   width: '400px',
                                   height: '400px',
                                   zIndex: 20,
                                   position: 'absolute',
-                                  x: 440,
+                                  x: TRACK_OFFSET,
                                   originX: 0,
-                                  boxShadow: `1px 2px 8px rgb(0,0,0,0.3)`,
+                                  boxShadow: '1px 2px 8px rgb(0,0,0,0.3)',
                                   transformOrigin: 'bottom left',
                                 }}
                                 animate={nextTrackControls}
-                                initial={{
-                                  opacity: 0,
-                                }}
-                                transition={{
-                                  duration: 0.2,
-                                }}
+                                initial={{ opacity: 0 }}
+                                transition={{ duration: 0.2 }}
                                 draggable={false}
-                                className="overflow-hidden border border-gray-500 rounded-sm border-opacity-30 "
-                                src={
-                                  next[0]
-                                    ? next[0]?.contextTrack?.metadata
-                                        ?.image_xlarge_url
-                                    : ''
-                                }
+                                className="overflow-hidden border border-gray-500 rounded-sm border-opacity-30"
+                                src={next[0]?.contextTrack?.metadata?.image_xlarge_url || ''}
                               />
                             </motion.div>
                           )}
@@ -334,54 +276,18 @@ const Player = () => {
                           <motion.img
                             ref={imgRef}
                             style={{
-                              originX: 0,
                               zIndex: 10,
-                              originY: 1,
                               width: '400px',
-                              boxShadow: `1px 2px 8px rgb(0,0,0,0.3)`,
                               transformOrigin: 'center center',
+                              transformStyle: 'preserve-3d',
+                              willChange: 'transform, box-shadow',
+                              perspective: 800,
                             }}
                             draggable={false}
-                            animate={{
-                              transform: !isDragging
-                                ? [
-                                    'perspective(800px) translateY(0px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1)',
-                                    'perspective(800px) translateY(1px) rotateX(1deg) rotateY(1deg) rotateZ(1deg) scale(1.01)',
-                                    'perspective(800px) translateY(0px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1.01)',
-                                    'perspective(800px) translateY(1px) rotateX(-1deg) rotateY(-1deg) rotateZ(-1deg) scale(1)',
-                                  ]
-                                : [
-                                    'perspective(800px) translateY(0px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1.01)',
-                                  ],
-
-                              filter: [
-                                `drop-shadow(rgba(0, 0, 0, 0.25) -5px -10px ${
-                                  isDragging ? 4 : 4
-                                }px)`,
-                                `drop-shadow(rgba(0, 0, 0, 0.25) -5px -5px ${
-                                  isDragging ? 5 : 2
-                                }px)`,
-                                `drop-shadow(rgba(0, 0, 0, 0.25) -5px -10px ${
-                                  isDragging ? 5 : 4
-                                }px)`,
-                                `drop-shadow(rgba(0, 0, 0, 0.25) -5px -5px ${
-                                  isDragging ? 5 : 4
-                                }px)`,
-                              ],
-                            }}
-                            transition={{
-                              type: 'spring',
-                              duration: +(audioData.tempo / 125).toFixed(2),
-                              bounce: 0.3,
-                              damping: 12,
-                              repeatType: 'mirror',
-                              stiffness: 50,
-                              repeat: Infinity,
-                            }}
-                            className="overflow-hidden border border-gray-500 rounded-sm border-opacity-30 "
-                            src={
-                              current?.contextTrack?.metadata?.image_xlarge_url
-                            }
+                            animate={isDragging ? DRAG_ANIMATE : BOUNCE_ANIMATE}
+                            transition={bounceTransition}
+                            className="overflow-hidden border border-gray-500 rounded-sm border-opacity-30"
+                            src={current?.contextTrack?.metadata?.image_xlarge_url}
                           />
                         </motion.div>
                       )}
@@ -403,22 +309,22 @@ const Player = () => {
                     ? 'rgb(255,255,255)'
                     : 'rgb(0,0,0)',
               }}
-              className={` flex flex-col max-w-[400px] xl:max-w-none justify-end gap-0.5`}
+              className="flex flex-col max-w-[400px] xl:max-w-none justify-end gap-0.5"
             >
               <div className="flex items-end font-light">
-                {current.contextTrack?.metadata?.album_title}
+                {current?.contextTrack?.metadata?.album_title}
               </div>
               <div className="text-3xl font-bold xl:text-5xl">
-                {current.contextTrack?.metadata?.title}
+                {current?.contextTrack?.metadata?.title}
               </div>
               <div className="flex items-end mt-2 font-light">
-                {current.contextTrack?.metadata?.artist_name}
+                {current?.contextTrack?.metadata?.artist_name}
               </div>
             </motion.div>
           </div>
           <div
             style={{ scrollbarWidth: 'none' }}
-            className="relative hide-scrollbar flex-col mx-4 my-[calc(14px+.5rem)] overflow-x-hidden overflow-y-auto border-white border  justify-start"
+            className="relative hide-scrollbar flex-col mx-4 my-[calc(14px+.5rem)] overflow-x-hidden overflow-y-auto justify-start"
           >
             <div
               ref={lyricsRef}

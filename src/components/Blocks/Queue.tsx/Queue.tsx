@@ -6,7 +6,7 @@ const Queue = () => {
   return (
     <div
       style={{ scrollbarWidth: 'none' }}
-      className="relative border border-opacity-20"
+      className="relative"
     ></div>
   );
 };

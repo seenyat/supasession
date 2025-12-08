@@ -1,13 +1,18 @@
-import { useSpring } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { checkLyricsPlus, getSessionMembers } from './functions';
 import { doc } from '../components/FullScreen/FullScreen';
 import { generateQRCode } from './api';
 import { FastAverageColor } from 'fast-average-color';
-import Queue from '../components/Blocks/Queue.tsx/Queue';
 import { Track } from '../types/types';
 
 const fac = new FastAverageColor();
+
+// Helper to safely stringify objects with BigInt
+const safeStringify = (obj: any): string => {
+  return JSON.stringify(obj, (_, value) =>
+    typeof value === 'bigint' ? value.toString() : value
+  );
+};
 
 type UseQRCodeParams = {
   sessionUrl: string;
@@ -38,61 +43,85 @@ type User = {
   joined_timestamp: number;
 };
 
-type suckyQueue = typeof Spicetify.Queue;
-
 type supaQueue = {
   next: Track[];
   prev: Track[];
-  current: Track;
+  current: Track | null;
 };
 
+let queueRenderCount = 0;
 export const useQueue = (): {
   queue: {
-    next: any[];
-    prev: any[];
-    current: any;
+    next: Track[];
+    prev: Track[];
+    current: Track | null;
   };
 } => {
-  // console.log(Queue);
+  console.log('[useQueue] hook called, render #', ++queueRenderCount);
   const [queue, setQueue] = useState<supaQueue>({
-    next: [...Spicetify.Queue.nextTracks],
-    prev: [...Spicetify.Queue.prevTracks],
-    current: { ...Spicetify.Queue?.track },
+    next: [],
+    prev: [],
+    current: null,
   });
+  const callbackRef = useRef<((data: any) => void) | null>(null);
+
   useEffect(() => {
-    Spicetify.Platform.PlayerAPI._events.addListener(
-      'queue_update',
-      (data: any) => {
-        const queue: suckyQueue = JSON.parse(JSON.stringify(Spicetify.Queue));
-        setQueue((state) => ({
-          current: { ...queue.track },
-          next: [...queue.nextTracks],
-          prev: [state.current],
-        }));
-      }
-    );
+    // Initialize queue once Spicetify is ready
+    if (Spicetify?.Queue) {
+      setQueue({
+        next: [...(Spicetify.Queue.nextTracks || [])],
+        prev: [...(Spicetify.Queue.prevTracks || [])],
+        current: Spicetify.Queue.track ? { ...Spicetify.Queue.track } : null,
+      });
+    }
+
+    // Create callback and store ref for proper cleanup
+    const callback = () => {
+      if (!Spicetify?.Queue) return;
+      const q = JSON.parse(safeStringify(Spicetify.Queue));
+      setQueue((state) => ({
+        current: q.track ? { ...q.track } : null,
+        next: [...(q.nextTracks || [])],
+        prev: state.current ? [state.current] : [],
+      }));
+    };
+    callbackRef.current = callback;
+
+    Spicetify?.Platform?.PlayerAPI?._events?.addListener('queue_update', callback);
+
     return () => {
-      Spicetify.Platform.PlayerAPI._events.removeListener(
-        'queue_update',
-        setQueue
-      );
+      if (callbackRef.current) {
+        Spicetify?.Platform?.PlayerAPI?._events?.removeListener(
+          'queue_update',
+          callbackRef.current
+        );
+      }
     };
   }, []);
+
   return { queue };
 };
 
-// Define the useSessionMembers hook
+let sessionMembersRenderCount = 0;
 export const useSessionMembers = ({
   joinSessionToken,
 }: UseSessionMembersParams): User[] => {
+  console.log('[useSessionMembers] hook called, render #', ++sessionMembersRenderCount);
   const [users, setUsers] = useState<User[]>([]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      getSessionMembers(joinSessionToken).then((data: User[]) => {
-        setUsers(data);
+    if (!joinSessionToken) return;
+    console.log('[useSessionMembers] effect running, fetching members...');
+
+    const fetchMembers = () => {
+      console.log('[useSessionMembers] polling members');
+      getSessionMembers(joinSessionToken).then((data) => {
+        if (data) setUsers(data);
       });
-    }, 1000);
+    };
+
+    fetchMembers();
+    const interval = setInterval(fetchMembers, 5000);
     return () => clearInterval(interval);
   }, [joinSessionToken]);
 
@@ -119,44 +148,54 @@ export const useQRCode = ({ sessionUrl }: UseQRCodeParams): UseQRCodeReturn => {
 export const useLyricsPlus = () => {
   useEffect(() => {
     if (
-      Spicetify?.Config.custom_apps.includes('lyrics-plus') &&
+      Spicetify?.Config?.custom_apps?.includes('lyrics-plus') &&
       checkLyricsPlus()
     ) {
       if (doc.webkitIsFullScreen) {
-        Spicetify.Platform.History.push('/lyrics-plus');
+        Spicetify?.Platform?.History?.push('/lyrics-plus');
       }
     }
     window.dispatchEvent(new Event('fad-request'));
-  }, [Spicetify.Player.data.track, doc.webkitIsFullScreen]);
+  }, [Spicetify?.Player?.data?.track, doc.webkitIsFullScreen]);
 };
 
-export const useQrColor = (
-  {
-    imgRef,
-  }: {
-    imgRef: React.RefObject<HTMLImageElement>;
-  },
-  queue: object
-): UseQrColorResult => {
+let qrColorRenderCount = 0;
+export const useQrColor = ({
+  imgRef,
+  src,
+}: {
+  imgRef: React.RefObject<HTMLImageElement>;
+  src?: string | null;
+}): UseQrColorResult => {
+  console.log('[useQrColor] hook called, render #', ++qrColorRenderCount, 'src:', src?.slice(-20));
   const [qrColor, setQrColor] = useState<string>('');
   const [hexColor, setHexColor] = useState<string>('');
 
   useEffect(() => {
-    setTimeout(() => {
-      if (!imgRef.current) {
-        return;
-      }
+    if (!src) return;
+
+    let cancelled = false;
+    const timeoutId = setTimeout(() => {
+      if (!imgRef.current) return;
       fac
         .getColorAsync(imgRef.current)
         .then((color: Color) => {
+          if (cancelled) return;
           setQrColor(color.rgba);
           setHexColor(color.hex);
         })
         .catch(() => {
-          throw 'Error parsing QR code';
+          if (!cancelled) {
+            console.warn('Error extracting color from image');
+          }
         });
-    }, 200);
-  }, [fac, imgRef.current?.src, imgRef.current?.complete, queue]);
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [src, imgRef]);
 
   return [qrColor, hexColor];
 };

@@ -1,33 +1,19 @@
 {
   "name": "supasession",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
-    "build": "spicetify-creator",
-    "build-local": "spicetify-creator --out=dist --minify",
-    "watch": "spicetify-creator --watch"
+    "dev": "pnpm --parallel -r run dev",
+    "dev:web": "pnpm --filter @supasession/web dev",
+    "dev:relay": "pnpm --filter @supasession/relay dev",
+    "build": "pnpm -r run build",
+    "build:web": "pnpm --filter @supasession/web build",
+    "build:relay": "pnpm --filter @supasession/relay build",
+    "build:extension": "pnpm --filter @supasession/extension build",
+    "check": "pnpm -r run check"
   },
   "license": "MIT",
   "devDependencies": {
-    "@types/react": "^18.0.25",
-    "@types/react-dom": "^18.0.8",
-    "spicetify-creator": "^1.0.11",
-    "tailwindcss": "^3.2.7"
-  },
-  "dependencies": {
-    "@nuintun/qrcode": "^3.3.0",
-    "@skinnypete/color": "^1.0.3",
-    "art-qr": "^0.1.2",
-    "color.js": "^1.2.0",
-    "colortranslator": "^1.9.3",
-    "dayjs": "^1.11.6",
-    "dont-crop": "^0.2.0",
-    "easyqrcodejs": "^4.4.13",
-    "fast-average-color": "^9.1.1",
-    "framer-motion": "^7.6.6",
-    "lucide-react": "^0.176.0",
-    "socket.io-client": "^4.5.3",
-    "three": "^0.151.3",
-    "zustand": "^4.3.7"
+    "typescript": "^5.6.0"
   }
 }
