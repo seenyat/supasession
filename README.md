@@ -1,115 +1,52 @@
 # SupaSession
 
-A modern music visualization web app that syncs with Spotify via WebSocket.
+> Because looking at Spotify wasn't extra enough.
 
-## Architecture
+![SupaSession in action](screenshot.webp)
 
-```
-┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│  Spicetify       │     │  Relay Server    │     │  Web App         │
-│  Extension       │────▶│  (Node + WS)     │◀────│  (React + Motion)│
-│  (Producer)      │     │                  │     │  (Consumer)      │
-└──────────────────┘     └──────────────────┘     └──────────────────┘
-        │                         │                        │
-        └─────── WebSocket ───────┴──── WebSocket ─────────┘
-```
+A **completely unnecessary** but absolutely gorgeous way to display what you're listening to. Syncs your Spotify in real-time via WebSockets, wraps your album art in a dreamy blurred background, and throws lyrics on screen like it's a music video.
 
-- **extension/** - Spicetify extension that runs inside Spotify, sends player state
-- **relay/** - WebSocket relay server that routes messages between producer and consumers
-- **web/** - React web app with modern animations (Motion) that displays the current session
-- **shared/** - Shared TypeScript types and Effect/Schema message definitions
+**Is it practical?** No.  
+**Is it beautiful?** Absolutely.  
+**Will you run it on a second monitor just to vibe?** You already know.
 
 ## Quick Start
 
 ```bash
-# Install dependencies
+# Install
 pnpm install
 
-# Start the relay server (terminal 1)
-pnpm dev:relay
+# Run everything
+pnpm dev
 
-# Start the web app (terminal 2)
-pnpm dev:web
-
-# Build the Spicetify extension
+# Build the Spotify extension
 pnpm build:extension
 ```
 
-## How It Works
-
-1. **Spicetify Extension** runs inside Spotify and generates a session ID
-2. The extension connects to the relay server as a **producer**
-3. The extension sends player state (current track, queue, play/pause) to the relay
-4. **Web App** connects to the relay with the same session ID as a **consumer**
-5. The web app receives real-time updates and displays them with smooth animations
-
-## Session Pairing
-
-1. In Spotify, the extension shows a badge with the session ID (click to copy)
-2. Open the web app and paste the session ID, or use the URL `?session=<id>`
-3. The web app connects and syncs with your Spotify playback
-
-## Development
-
-### Packages
-
-| Package | Description | Port |
-|---------|-------------|------|
-| `@supasession/shared` | Shared types and schemas | - |
-| `@supasession/relay` | WebSocket relay server | 17777 |
-| `@supasession/web` | React web app | 3000 |
-| `@supasession/extension` | Spicetify extension | - |
-
-### Commands
+## Install the Spicetify Extension
 
 ```bash
-pnpm dev          # Start relay + web in parallel
-pnpm dev:relay    # Start relay server only
-pnpm dev:web      # Start web app only
-pnpm build        # Build all packages
-pnpm check        # TypeScript check all packages
-```
-
-### Installing the Extension
-
-After building, copy the extension to your Spicetify extensions folder:
-
-```bash
-pnpm build:extension
 cp extension/dist/supasession-messenger.js ~/.config/spicetify/Extensions/
 spicetify config extensions supasession-messenger.js
 spicetify apply
 ```
 
-## Tech Stack
+Click the green badge in Spotify → Copy session ID → Open `localhost:3000?session=<id>` → Vibe.
 
-- **React 18** with functional components and hooks
-- **Motion** (framer-motion v11) for animations
-- **Zustand** for state management
-- **Effect** + **@effect/schema** for robust message handling
-- **TailwindCSS** for styling
-- **Vite** for fast development
-- **WebSocket** for real-time communication
+Or just open the web app and it auto-joins if you only have one session.
 
-## Message Protocol
+## How It Works
 
-All messages use a versioned JSON envelope:
-
-```typescript
-interface Message {
-  v: 1;              // Protocol version
-  sessionId: string; // Session identifier
-  kind: string;      // Message type
-  ts: number;        // Timestamp
-  payload: unknown;  // Type-specific payload
-}
+```
+Spotify → [Spicetify Extension] → WebSocket Relay → React Web App
 ```
 
-Message kinds:
-- `hello` - Initial handshake (role: producer/consumer)
-- `welcome` - Server acknowledgment
-- `player_state` - Current playback state
-- `queue_update` - Queue changed
-- `heartbeat` - Keep-alive
-- `control` - Playback commands (from consumer to producer)
-- `error` - Error messages
+That's it. Three pieces. One vibe.
+
+## Tech
+
+React • Motion • Zustand • TailwindCSS • WebSockets • Unnecessary amounts of blur
+
+---
+
+*Built for fun. Maintained for vibes.*
