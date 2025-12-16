@@ -10,6 +10,10 @@ A **completely unnecessary** but absolutely gorgeous way to display what you're 
 **Is it beautiful?** Absolutely.  
 **Will you run it on a second monitor just to vibe?** You already know.
 
+## Requirements
+
+- [Spicetify](https://github.com/spicetify/cli) - Custom Spotify client required to run the extension
+
 ## Quick Start
 
 ```bash
@@ -33,7 +37,7 @@ spicetify apply
 
 Click the green badge in Spotify → Copy session ID → Open `localhost:3000?session=<id>` → Vibe.
 
-Or just open the web app and it auto-joins if you only have one session.
+Or just open the web app and pick from available sessions.
 
 ## How It Works
 
@@ -46,6 +50,10 @@ That's it. Three pieces. One vibe.
 ## Tech
 
 React • Motion • Zustand • TailwindCSS • WebSockets • Unnecessary amounts of blur
+
+## Credits
+
+- [Spicetify](https://github.com/spicetify/cli) - Makes Spotify hackable
 
 ---
 

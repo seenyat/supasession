@@ -18,10 +18,11 @@ interface UseWebSocketOptions {
   autoJoin?: boolean;
   onQueue?: (snapshot: any) => void;
   onPlayer?: (state: any) => void;
+  onSessionsDiscovered?: (sessions: string[]) => void;
 }
 
 export const useWebSocket = (options: UseWebSocketOptions = {}) => {
-  const { sessionId = null, autoJoin = false, onQueue, onPlayer } = options;
+  const { sessionId = null, autoJoin = false, onQueue, onPlayer, onSessionsDiscovered } = options;
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimeoutRef = useRef<number | null>(null);
@@ -37,9 +38,16 @@ export const useWebSocket = (options: UseWebSocketOptions = {}) => {
       try {
         const raw = JSON.parse(event.data);
 
-        // Handle sessions list (for choosing or auto-join failure)
+        // Handle sessions list
         if (raw.kind === "sessions") {
           console.log("Available sessions:", raw.payload.sessions);
+          onSessionsDiscovered?.(raw.payload.sessions || []);
+          return;
+        }
+
+        // Handle no sessions error
+        if (raw.kind === "error" && raw.payload?.code === "NO_SESSIONS") {
+          onSessionsDiscovered?.([]);
           return;
         }
 
@@ -124,7 +132,7 @@ export const useWebSocket = (options: UseWebSocketOptions = {}) => {
         console.error("Failed to parse message:", e);
       }
     },
-    [setConnectionStatus, setSessionId, setPlayerState, setQueue, setLyrics]
+    [setConnectionStatus, setSessionId, setPlayerState, setQueue, setLyrics, onSessionsDiscovered]
   );
 
   const connect = useCallback(() => {
@@ -141,15 +149,20 @@ export const useWebSocket = (options: UseWebSocketOptions = {}) => {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      ws.send(
-        JSON.stringify({
-          v: 1,
-          sessionId: sessionId || "",
-          kind: "hello",
-          ts: Date.now(),
-          payload: { role: "consumer" },
-        })
-      );
+      if (autoJoin && !sessionId) {
+        // First discover available sessions
+        ws.send(JSON.stringify({ kind: "discover", ts: Date.now() }));
+      } else {
+        ws.send(
+          JSON.stringify({
+            v: 1,
+            sessionId: sessionId || "",
+            kind: "hello",
+            ts: Date.now(),
+            payload: { role: "consumer" },
+          })
+        );
+      }
     };
 
     ws.onmessage = handleMessage;

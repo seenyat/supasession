@@ -3,9 +3,10 @@ import { motion } from "motion/react";
 
 interface Props {
   onConnect: (sessionId: string) => void;
+  availableSessions?: string[];
 }
 
-export const SessionConnect = ({ onConnect }: Props) => {
+export const SessionConnect = ({ onConnect, availableSessions = [] }: Props) => {
   const [sessionId, setSessionId] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -33,6 +34,30 @@ export const SessionConnect = ({ onConnect }: Props) => {
           Connect to a Spotify session to see what's playing
         </p>
 
+        {availableSessions.length > 0 && (
+          <div className="mb-6">
+            <p className="text-white/40 text-sm mb-3">Available sessions:</p>
+            <div className="flex flex-col gap-2">
+              {availableSessions.map((id) => (
+                <motion.button
+                  key={id}
+                  onClick={() => onConnect(id)}
+                  className="w-full px-4 py-3 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl text-white font-mono text-sm text-left transition-colors"
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                >
+                  {id.slice(0, 8)}...
+                </motion.button>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 my-4">
+              <div className="flex-1 h-px bg-white/10" />
+              <span className="text-white/30 text-xs">or enter manually</span>
+              <div className="flex-1 h-px bg-white/10" />
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <input
             type="text"
@@ -40,7 +65,7 @@ export const SessionConnect = ({ onConnect }: Props) => {
             onChange={(e) => setSessionId(e.target.value)}
             placeholder="Enter session ID"
             className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-white/30 transition-colors font-mono text-sm"
-            autoFocus
+            autoFocus={availableSessions.length === 0}
           />
           <motion.button
             type="submit"
