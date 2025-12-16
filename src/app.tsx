@@ -1,9 +1,10 @@
 import styles from './css/app.module.scss';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { doc } from './components/FullScreen/FullScreen';
-import { motion } from 'framer-motion';
-import { useQrColor, useQueue } from './utils/hooks';
+import { AnimationControls, motion } from 'framer-motion';
+import { useQueue } from './utils/hooks';
+import { useSpicetifyReady } from './utils/useSpicetifyReady';
 import FullScreenView from './pages/FullScreenView/FullScreenView';
 import SupaSession from './components/SupaSession/SupaSession';
 import { Expand } from 'lucide-react';
@@ -26,6 +27,8 @@ export interface PlayerStore {
     duration: number;
   }) => void;
   qrColor: string;
+  transitionAnimation?: AnimationControls;
+  setTransitionAnimation: (transitionAnimation: AnimationControls) => void;
   setQrColor: (qrColor: string) => void;
   joinSessionToken: string;
   setJoinSessionToken: (joinSessionToken: string) => void;
@@ -39,47 +42,73 @@ export async function getAlbumData(uri: string) {
 export const usePlayerStore = create<PlayerStore>((set) => ({
   queue: [],
   setQueue: (queue: any) => set({ queue }),
-  qrColor: 'black',
+  qrColor: '#000000',
   audioData: {
     tempo: 0,
     duration: 10000,
   },
+  transitionAnimation: undefined,
+  setTransitionAnimation: (transitionAnimation: AnimationControls) =>
+    set({ transitionAnimation }),
   joinSessionToken: '',
   setJoinSessionToken: (joinSessionToken: string) => set({ joinSessionToken }),
   setAudioData: (audioData) => set({ audioData }),
   setQrColor: (qrColor: string) => set({ qrColor }),
 }));
 
+let appRenderCount = 0;
 export const App = () => {
-  const buildURL = (url: string, queryParams: any) => {
-    const params = new URLSearchParams(queryParams).toString();
-    return `${url}?${params}`;
-  };
+  console.log('[App] component render #', ++appRenderCount);
+  const isReady = useSpicetifyReady();
   const [isFullScreen, setIsFullScreen] = useState(false);
   const setJoinSessionToken = usePlayerStore(
-    (state) => state.setJoinSessionToken
+    (state) => state.setJoinSessionToken,
   );
 
-  const [response, setResponse] = useState();
-
-  const local_device_id = Spicetify.Player.data.play_origin.device_identifier;
-
-  const endpoint = buildURL(
-    'https://spclient.wg.spotify.com/social-connect/v2/sessions/current_or_new',
-    { local_device_id: local_device_id, type: 'REMOTE' }
-  );
   useEffect(() => {
+    if (!isReady) return;
+
+    const localDeviceId = Spicetify.Player.data?.play_origin?.device_identifier;
+    if (!localDeviceId) return;
+
+    const params = new URLSearchParams({
+      local_device_id: localDeviceId,
+      type: 'REMOTE',
+    }).toString();
+    const endpoint = `https://spclient.wg.spotify.com/social-connect/v2/sessions/current_or_new?${params}`;
+
     Spicetify.CosmosAsync.get(endpoint).then((data) =>
-      setJoinSessionToken(data.join_session_token)
+      setJoinSessionToken(data?.join_session_token || ''),
     );
+  }, [isReady]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setIsFullScreen(false);
+        const container = document.querySelector(
+          `.${styles.supersession}.${styles.overlay}`,
+        );
+        if (container) {
+          container.classList.add(styles.hidden);
+        }
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
   const { queue } = useQueue();
   const [qrColor] = usePlayerStore((state) => [state.qrColor]);
 
+  if (!isReady) {
+    return <div className={styles.supersession}>Loading...</div>;
+  }
+
   const fsHandler = () => {
     const container = document.querySelector(
-      `.${styles.supersession}.${styles.overlay}`
+      `.${styles.supersession}.${styles.overlay}`,
     );
     if (!container) {
       // console.log('no container');
@@ -98,7 +127,7 @@ export const App = () => {
       <div className={styles.fullscreen_container}>
         <FullScreenView />
       </div>,
-      container
+      container,
     );
   };
 
@@ -115,7 +144,7 @@ export const App = () => {
           {qrColor && (
             <button
               className={` overflow-hidden bg-[${getContrastColor(
-                qrColor
+                qrColor,
               )}/0.5] absolute bottom-8  text-opacity-30 bg-opacity-0 hover:bg-opacity-100 rounded p-4 opacity-20 hover:opacity-30`}
               onClick={fsHandler}
               style={{
@@ -130,11 +159,5 @@ export const App = () => {
     </>
   );
 };
-
-const TailwindClasses = (
-  <div className="bg-[black/0.5] ">
-    <div className="bg-[white/0.5]"></div>
-  </div>
-);
 
 export default App;

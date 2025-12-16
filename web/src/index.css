@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+  background: #0a0a0a;
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+@layer components {
+  .lyrics-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .lyrics-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .lyrics-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0);
+    border-radius: 3px;
+    transition: background 0.3s ease;
+  }
+
+  .lyrics-scrollbar:hover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .lyrics-scrollbar:hover::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
+  }
+
+  .lyrics-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.3s ease;
+  }
+
+  .lyrics-scrollbar:hover {
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+
+  .album-floating-shadow {
+    position: relative;
+  }
+
+  .album-floating-shadow::before {
+    content: "";
+    position: absolute;
+    left: 60px;
+    right: 60px;
+    bottom: -18px;
+    height: 30px;
+    border-radius: 999px;
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse at center,
+      rgba(0, 0, 0, 0.3) 0%,
+      rgba(0, 0, 0, 0.15) 50%,
+      transparent 75%
+    );
+    opacity: 0.7;
+    filter: blur(12px);
+    z-index: -1;
+  }
+
+  .album-floating-shadow::after {
+    content: "";
+    position: absolute;
+    left: 30px;
+    right: 30px;
+    bottom: -10px;
+    height: 30px;
+    border-radius: 999px;
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse at center,
+      var(--album-glow, rgba(255, 255, 255, 0.15)) 0%,
+      transparent 70%
+    );
+    filter: blur(20px);
+    opacity: 0.8;
+    mix-blend-mode: screen;
+    z-index: -1;
+  }
+
+}

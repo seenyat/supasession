@@ -12,11 +12,21 @@ import { doc } from '../components/FullScreen/FullScreen';
         `.${styles.supersession}.${styles.overlay}`
       );
       if (!container) {
-        // console.log('no container');
         return;
       }
-      if (doc.webkitIsFullScreen) {
+      if (document.fullscreenElement) {
         document.exitFullscreen();
+        container.classList.add(styles.hidden);
+      }
+    }
+  });
+
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) {
+      const container = document.querySelector(
+        `.${styles.supersession}.${styles.overlay}`
+      );
+      if (container) {
         container.classList.add(styles.hidden);
       }
     }

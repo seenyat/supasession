@@ -1,0 +1,14 @@
+{
+  "name": "@supasession/extension",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/extensions/messenger.tsx --bundle --outfile=dist/supasession-messenger.js --format=iife --target=es2020 --minify",
+    "watch": "esbuild src/extensions/messenger.tsx --bundle --outfile=dist/supasession-messenger.js --format=iife --target=es2020 --watch"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "dependencies": {}
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@supasession/shared",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@effect/schema": "^0.75.0",
+    "effect": "^3.10.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

@@ -3,8 +3,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import Dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import {
-  animate,
-  LayoutGroup,
   motion,
   useMotionValue,
   useSpring,
@@ -70,7 +68,8 @@ const FullScreen = ({ response }: TFullScreenProps) => {
   const [queuePrev, setQueuePrev] = useState<any>(queue.prev);
   const coverSelector = styles.cover || '';
 
-  const [qrColor, hexQrColor] = useQrColor({ imgRef }, queue);
+  const currentImageUrl = currentSong?.metadata?.image_xlarge_url;
+  const [qrColor, hexQrColor] = useQrColor({ imgRef, src: currentImageUrl });
 
   useEffect(() => {
     const newSong = Spicetify.Player.data.track;
