@@ -16,8 +16,8 @@ function AppShell() {
   const [inputSessionId, setInputSessionId] = useState<string | null>(null);
   const [autoJoin, setAutoJoin] = useState(false);
   const [showFallbackDialog, setShowFallbackDialog] = useState(false);
+  const [availableSessions, setAvailableSessions] = useState<string[]>([]);
   const storeSessionId = usePlayerStore((s) => s.sessionId);
-  const connectionStatus = usePlayerStore((s) => s.connectionStatus);
   const dominantColor = usePlayerStore((s) => s.dominantColor);
 
   useEffect(() => {
@@ -37,16 +37,10 @@ function AppShell() {
   }, [storeSessionId, inputSessionId]);
 
   useEffect(() => {
-    if (autoJoin && !storeSessionId && connectionStatus === "disconnected") {
-      const timeout = setTimeout(() => {
-        setShowFallbackDialog(true);
-      }, 2000);
-      return () => clearTimeout(timeout);
-    }
     if (storeSessionId) {
       setShowFallbackDialog(false);
     }
-  }, [autoJoin, storeSessionId, connectionStatus]);
+  }, [storeSessionId]);
 
   const service = usePlayerService();
   const setSendControl = useSetSendControl();
@@ -56,6 +50,10 @@ function AppShell() {
     autoJoin,
     onQueue: (snapshot) => service.send({ type: "SERVER_QUEUE", snapshot }),
     onPlayer: (state) => service.send({ type: "SERVER_PLAYER", state }),
+    onSessionsDiscovered: (sessions) => {
+      setAvailableSessions(sessions);
+      setShowFallbackDialog(true);
+    },
   });
 
   useEffect(() => {
@@ -118,7 +116,7 @@ function AppShell() {
       />
 
       <AnimatePresence>
-        {showConnectDialog && <SessionConnect onConnect={handleConnect} />}
+        {showConnectDialog && <SessionConnect onConnect={handleConnect} availableSessions={availableSessions} />}
       </AnimatePresence>
 
       {/* Main container matching original aspect-video layout */}
